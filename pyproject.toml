@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "veritas-tg51"
@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "HW Salmon", email = ""},
+    {name = "HW Salmon"},
 ]
 keywords = ["medical physics", "TG-51", "dosimetry", "radiotherapy", "calibration", "linac"]
 classifiers = [
