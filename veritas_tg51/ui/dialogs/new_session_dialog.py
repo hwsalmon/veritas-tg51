@@ -33,7 +33,7 @@ class SessionSetup:
     linac_id: int
     linac_name: str
     linac_model: str
-    linac_sn: str
+    linac_sn: str = ""
     chamber_id: int
     chamber_model: str
     chamber_sn: str
