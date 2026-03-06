@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# Database (user data — not committed)
+data/veritas.db
+veritas_tg51/data/veritas.db
+
+# Generated PDF reports
+TG51_*.pdf
+*.pdf
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Claude memory / project context
+.claude/
+
+# Reference documents (large PDFs — user supplied)
+Data/
