@@ -33,7 +33,6 @@ class SessionSetup:
     linac_id: int
     linac_name: str
     linac_model: str
-    linac_sn: str = ""
     chamber_id: int
     chamber_model: str
     chamber_sn: str
@@ -45,6 +44,7 @@ class SessionSetup:
     p_elec: float
     physicist: str
     session_date: datetime.date
+    linac_sn: str = ""
     chamber_calibration_date: Optional[datetime.date] = None
     electrometer_calibration_date: Optional[datetime.date] = None
 
