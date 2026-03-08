@@ -59,19 +59,16 @@ class EquipmentPage(QWidget):
 
         self.tab_centers = _CentersTab()
         self.tab_linacs = _LinacsTab()
-        self.tab_beams = _BeamsTab()
         self.tab_chambers = _ChambersTab()
         self.tab_electrometers = _ElectrometersTab()
 
         self.tabs.addTab(self.tab_centers, "Institutions")
         self.tabs.addTab(self.tab_linacs, "Linacs")
-        self.tabs.addTab(self.tab_beams, "Beams")
         self.tabs.addTab(self.tab_chambers, "Ion Chambers")
         self.tabs.addTab(self.tab_electrometers, "Electrometers")
 
-        # Refresh downstream tabs when parent tabs change data
+        # Beam energies are managed inline inside the Linac dialog
         self.tab_centers.data_changed.connect(self.tab_linacs.refresh)
-        self.tab_linacs.data_changed.connect(self.tab_beams.refresh)
 
         layout.addWidget(self.tabs)
 
@@ -357,17 +354,23 @@ class _LinacsTab(_TableTab):
             QMessageBox.warning(self, "No Institutions", "Add an Institution first.")
             return
         dlg = _LinacDialog(centers=centers, parent=self)
-        if dlg.exec() == QDialog.Accepted:
-            from ...models.db import get_session
-            from ...models.entities import Linac
-            session = get_session()
-            try:
-                session.add(Linac(**dlg.get_data()))
-                session.commit()
-            finally:
-                session.close()
-            self.refresh()
-            self.data_changed.emit()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        from ...models.db import get_session
+        from ...models.entities import Linac, BeamEnergy
+        session = get_session()
+        try:
+            linac = Linac(**dlg.get_linac_data())
+            session.add(linac)
+            session.flush()
+            for b in dlg.get_display_beams():
+                bd = {k: v for k, v in b.items() if k != "id"}
+                session.add(BeamEnergy(linac_id=linac.id, **bd))
+            session.commit()
+        finally:
+            session.close()
+        self.refresh()
+        self.data_changed.emit()
 
     def _edit(self):
         rec_id = self._selected_id()
@@ -388,18 +391,37 @@ class _LinacsTab(_TableTab):
             }
         finally:
             session.close()
-        dlg = _LinacDialog(centers=centers, data=data, parent=self)
-        if dlg.exec() == QDialog.Accepted:
-            session = get_session()
-            try:
-                obj = session.get(Linac, rec_id)
-                for k, v in dlg.get_data().items():
-                    setattr(obj, k, v)
-                session.commit()
-            finally:
-                session.close()
-            self.refresh()
-            self.data_changed.emit()
+        dlg = _LinacDialog(centers=centers, data=data, linac_id=rec_id, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        from ...models.db import get_session
+        from ...models.entities import Linac, BeamEnergy
+        session = get_session()
+        try:
+            # Update linac fields
+            obj = session.get(Linac, rec_id)
+            for k, v in dlg.get_linac_data().items():
+                setattr(obj, k, v)
+            # Delete removed beams (cascade handles sessions)
+            for bid in dlg.get_deleted_ids():
+                b_obj = session.get(BeamEnergy, bid)
+                if b_obj:
+                    session.delete(b_obj)
+            # Update existing / insert new beams
+            for b in dlg.get_display_beams():
+                bd = {k: v for k, v in b.items() if k != "id"}
+                if b.get("id"):
+                    b_obj = session.get(BeamEnergy, b["id"])
+                    if b_obj:
+                        for k, v in bd.items():
+                            setattr(b_obj, k, v)
+                else:
+                    session.add(BeamEnergy(linac_id=rec_id, **bd))
+            session.commit()
+        finally:
+            session.close()
+        self.refresh()
+        self.data_changed.emit()
 
     def _delete(self):
         rec_id = self._selected_id()
@@ -561,11 +583,32 @@ class _CloneLinacDialog(QDialog):
 
 
 class _LinacDialog(QDialog):
-    def __init__(self, centers: list[tuple[int, str]], data: dict = None, parent=None):
+    """Add/edit a treatment machine with inline beam energy management."""
+
+    def __init__(
+        self,
+        centers: list[tuple[int, str]],
+        data: dict = None,
+        linac_id: int = None,
+        parent=None,
+    ):
         super().__init__(parent)
-        self.setWindowTitle("Linac")
-        self.setMinimumWidth(380)
-        form = QFormLayout(self)
+        self._linac_id = linac_id
+        self._display_beams: list[dict] = []   # {id or None, modality, energy_mv, ...}
+        self._deleted_ids: list[int] = []
+
+        self.setWindowTitle("Treatment Machine")
+        self.setMinimumSize(520, 560)
+        root = QVBoxLayout(self)
+        root.setSpacing(10)
+        root.setContentsMargins(16, 16, 16, 16)
+
+        # ── Machine fields ────────────────────────────────────────────
+        mach_grp = QGroupBox("Machine Details")
+        form = QFormLayout(mach_grp)
+        form.setSpacing(8)
+        form.setContentsMargins(10, 6, 10, 10)
+
         self.cmb_center = QComboBox()
         for cid, cname in centers:
             self.cmb_center.addItem(cname, cid)
@@ -573,39 +616,193 @@ class _LinacDialog(QDialog):
             for i in range(self.cmb_center.count()):
                 if self.cmb_center.itemData(i) == data["center_id"]:
                     self.cmb_center.setCurrentIndex(i)
-        self.txt_manufacturer = QLineEdit(data.get("manufacturer", "") if data else "")
-        self.txt_model = QLineEdit(data.get("model", "") if data else "")
-        self.txt_name = QLineEdit(data.get("name", "") if data else "")
-        self.txt_sn = QLineEdit(data.get("serial_number", "") if data else "")
-        self.txt_notes = QLineEdit(data.get("notes", "") if data else "")
-        form.addRow("Center *:", self.cmb_center)
+        d = data or {}
+        self.txt_manufacturer = QLineEdit(d.get("manufacturer", ""))
+        self.txt_model        = QLineEdit(d.get("model", ""))
+        self.txt_name         = QLineEdit(d.get("name", ""))
+        self.txt_sn           = QLineEdit(d.get("serial_number") or "")
+        self.txt_notes        = QLineEdit(d.get("notes") or "")
+        form.addRow("Institution *:", self.cmb_center)
         form.addRow("Manufacturer *:", self.txt_manufacturer)
         form.addRow("Model *:", self.txt_model)
         form.addRow("Name *:", self.txt_name)
         form.addRow("Serial number:", self.txt_sn)
         form.addRow("Notes:", self.txt_notes)
+        root.addWidget(mach_grp)
+
+        # ── Beam energies ─────────────────────────────────────────────
+        beam_grp = QGroupBox("Beam Energies")
+        bl = QVBoxLayout(beam_grp)
+        bl.setSpacing(6)
+        bl.setContentsMargins(10, 6, 10, 10)
+
+        btb = QHBoxLayout()
+        self.btn_b_add  = QPushButton("Add");    self.btn_b_add.setFixedWidth(60)
+        self.btn_b_edit = QPushButton("Edit");   self.btn_b_edit.setFixedWidth(60)
+        self.btn_b_del  = QPushButton("Delete"); self.btn_b_del.setFixedWidth(60)
+        self.btn_b_add.clicked.connect(self._beam_add)
+        self.btn_b_edit.clicked.connect(self._beam_edit)
+        self.btn_b_del.clicked.connect(self._beam_delete)
+        btb.addWidget(self.btn_b_add)
+        btb.addWidget(self.btn_b_edit)
+        btb.addWidget(self.btn_b_del)
+        btb.addStretch()
+        bl.addLayout(btb)
+
+        self.beam_table = QTableWidget()
+        self.beam_table.setColumnCount(4)
+        self.beam_table.setHorizontalHeaderLabels(["Modality", "Energy", "FFF", "Label"])
+        self.beam_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.beam_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.beam_table.setAlternatingRowColors(True)
+        self.beam_table.verticalHeader().setVisible(False)
+        self.beam_table.horizontalHeader().setStretchLastSection(True)
+        self.beam_table.setColumnWidth(0, 75)
+        self.beam_table.setColumnWidth(1, 70)
+        self.beam_table.setColumnWidth(2, 50)
+        self.beam_table.setMaximumHeight(200)
+        self.beam_table.doubleClicked.connect(self._beam_edit)
+        bl.addWidget(self.beam_table)
+        root.addWidget(beam_grp)
+
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self._validate)
         btns.rejected.connect(self.reject)
-        form.addRow(btns)
+        root.addWidget(btns)
+
+        if linac_id:
+            self._load_beams_from_db()
+
+    # ── Beam helpers ──────────────────────────────────────────────────
+
+    def _load_beams_from_db(self):
+        from ...models.db import get_session
+        from ...models.entities import BeamEnergy
+        from sqlalchemy import select
+        session = get_session()
+        try:
+            beams = session.scalars(
+                select(BeamEnergy)
+                .where(BeamEnergy.linac_id == self._linac_id)
+                .order_by(BeamEnergy.id)
+            ).all()
+            self._display_beams = [
+                {
+                    "id": b.id, "modality": b.modality, "energy_mv": b.energy_mv,
+                    "is_fff": b.is_fff, "label": b.label,
+                    "pdd_shift_pct": b.pdd_shift_pct,
+                    "clinical_pdd_pct": b.clinical_pdd_pct,
+                    "i50_cm": b.i50_cm,
+                }
+                for b in beams
+            ]
+        finally:
+            session.close()
+        self._refresh_beam_table()
+
+    def _refresh_beam_table(self):
+        self.beam_table.setRowCount(0)
+        for b in self._display_beams:
+            r = self.beam_table.rowCount()
+            self.beam_table.insertRow(r)
+            for col, val in enumerate([
+                b["modality"],
+                f"{b['energy_mv']:.0f}",
+                "Yes" if b.get("is_fff") else "No",
+                b["label"],
+            ]):
+                item = QTableWidgetItem(val)
+                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.beam_table.setItem(r, col, item)
+
+    def _beam_add(self):
+        dlg = _BeamDialog(parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        b = dlg.get_data()
+        b["id"] = None
+        self._display_beams.append(b)
+        self._refresh_beam_table()
+        self.beam_table.selectRow(len(self._display_beams) - 1)
+
+    def _beam_edit(self):
+        row = self.beam_table.currentRow()
+        if row < 0:
+            return
+        b = self._display_beams[row]
+        dlg = _BeamDialog(data=b, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        updated = dlg.get_data()
+        updated["id"] = b.get("id")
+        self._display_beams[row] = updated
+        self._refresh_beam_table()
+        self.beam_table.selectRow(row)
+
+    def _beam_delete(self):
+        row = self.beam_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "No Selection", "Select a beam to delete.")
+            return
+        b = self._display_beams[row]
+        if b.get("id") and self._linac_id:
+            from ...models.db import get_session
+            from ...models.entities import CalibrationSession
+            session = get_session()
+            try:
+                n = session.query(CalibrationSession).filter(
+                    CalibrationSession.beam_energy_id == b["id"]
+                ).count()
+            finally:
+                session.close()
+            msg = f"Delete beam '{b['label']}'?"
+            if n > 0:
+                msg += (
+                    f"\n\nWarning: this beam has {n} calibration session(s). "
+                    "Deleting it will also permanently delete those sessions."
+                )
+            if QMessageBox.question(self, "Confirm Delete", msg,
+                                    QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                return
+        else:
+            if QMessageBox.question(
+                self, "Confirm Delete", f"Remove beam '{b['label']}'?",
+                QMessageBox.Yes | QMessageBox.No
+            ) != QMessageBox.Yes:
+                return
+        if b.get("id"):
+            self._deleted_ids.append(b["id"])
+        self._display_beams.pop(row)
+        self._refresh_beam_table()
+
+    # ── Dialog acceptance ─────────────────────────────────────────────
 
     def _validate(self):
-        for field, name in [(self.txt_manufacturer, "Manufacturer"),
-                            (self.txt_model, "Model"), (self.txt_name, "Name")]:
+        for field, name in [
+            (self.txt_manufacturer, "Manufacturer"),
+            (self.txt_model, "Model"),
+            (self.txt_name, "Name"),
+        ]:
             if not field.text().strip():
                 QMessageBox.warning(self, "Required", f"{name} is required.")
                 return
         self.accept()
 
-    def get_data(self) -> dict:
+    def get_linac_data(self) -> dict:
         return {
-            "center_id": self.cmb_center.currentData(),
-            "manufacturer": self.txt_manufacturer.text().strip(),
-            "model": self.txt_model.text().strip(),
-            "name": self.txt_name.text().strip(),
+            "center_id":     self.cmb_center.currentData(),
+            "manufacturer":  self.txt_manufacturer.text().strip(),
+            "model":         self.txt_model.text().strip(),
+            "name":          self.txt_name.text().strip(),
             "serial_number": self.txt_sn.text().strip() or None,
-            "notes": self.txt_notes.text().strip() or None,
+            "notes":         self.txt_notes.text().strip() or None,
         }
+
+    def get_display_beams(self) -> list[dict]:
+        return self._display_beams
+
+    def get_deleted_ids(self) -> list[int]:
+        return self._deleted_ids
 
 
 # ---------------------------------------------------------------------------
@@ -733,18 +930,22 @@ class _BeamsTab(_TableTab):
 
 
 class _BeamDialog(QDialog):
-    def __init__(self, linacs: list[tuple[int, str]], data: dict = None, parent=None):
+    def __init__(self, linacs: list[tuple[int, str]] | None = None, data: dict = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Beam Energy")
         self.setMinimumWidth(400)
         form = QFormLayout(self)
-        self.cmb_linac = QComboBox()
-        for lid, lname in linacs:
-            self.cmb_linac.addItem(lname, lid)
-        if data and data.get("linac_id"):
-            for i in range(self.cmb_linac.count()):
-                if self.cmb_linac.itemData(i) == data["linac_id"]:
-                    self.cmb_linac.setCurrentIndex(i)
+        if linacs is not None:
+            self.cmb_linac = QComboBox()
+            for lid, lname in linacs:
+                self.cmb_linac.addItem(lname, lid)
+            if data and data.get("linac_id"):
+                for i in range(self.cmb_linac.count()):
+                    if self.cmb_linac.itemData(i) == data["linac_id"]:
+                        self.cmb_linac.setCurrentIndex(i)
+            form.addRow("Linac *:", self.cmb_linac)
+        else:
+            self.cmb_linac = None
         self.cmb_modality = QComboBox()
         self.cmb_modality.addItems(["photon", "electron"])
         if data:
@@ -780,7 +981,6 @@ class _BeamDialog(QDialog):
         self._lbl_clinical_pdd = QLabel("Clinical %dd:")
         self._lbl_i50 = QLabel("I_50:")
 
-        form.addRow("Linac *:", self.cmb_linac)
         form.addRow("Modality *:", self.cmb_modality)
         form.addRow("Energy (MV/MeV) *:", self.spn_energy)
         form.addRow("", self.chk_fff)
@@ -813,12 +1013,13 @@ class _BeamDialog(QDialog):
     def get_data(self) -> dict:
         modality = self.cmb_modality.currentText()
         d = {
-            "linac_id":  self.cmb_linac.currentData(),
             "modality":  modality,
             "energy_mv": self.spn_energy.value(),
             "is_fff":    self.chk_fff.isChecked(),
             "label":     self.txt_label.text().strip(),
         }
+        if self.cmb_linac is not None:
+            d["linac_id"] = self.cmb_linac.currentData()
         if modality == "photon":
             d["pdd_shift_pct"]   = self.spn_pdd_shift.value() or None
             d["clinical_pdd_pct"] = self.spn_clinical_pdd.value() or None

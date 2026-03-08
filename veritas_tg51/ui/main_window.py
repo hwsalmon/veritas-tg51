@@ -287,8 +287,14 @@ class MainWindow(QMainWindow):
             if dlg.exec() != QDialog.Accepted or dlg.setup is None:
                 return
 
-            # Replace whatever is at stack index 0
+            # Save the current session before replacing it
             old = self.stack.widget(0)
+            if hasattr(old, "_save_timer") and hasattr(old, "_do_autosave"):
+                if old._save_timer.isActive():
+                    old._save_timer.stop()
+                old._do_autosave()
+
+            # Replace whatever is at stack index 0
             self.stack.removeWidget(old)
             old.deleteLater()
 
