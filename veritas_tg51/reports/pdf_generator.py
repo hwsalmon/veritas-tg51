@@ -377,6 +377,7 @@ def _photon_story_elements(
     notes: str = "",
     session_date: Optional[str] = None,
     field_size: str = "10x10 cm",
+    mraw_adjusted: bool = False,
 ) -> list:
     """Return story elements for a single photon beam page (no doc.build)."""
     S = _S()
@@ -428,14 +429,26 @@ def _photon_story_elements(
 
     story.append(_section_header("SECTION 7  |  Polarity Correction  P_pol"))
     cal = "Positive (+)" if inp.calibration_polarity == "pos" else "Negative (-)"
+    mraw_lbl = ("M_raw  (calibration polarity)  [*OUTPUT ADJUSTED — see note]"
+                if mraw_adjusted else "M_raw  (calibration polarity)")
     rows = [
         _step_row("7", "Calibration polarity", cal, ""),
         _step_row("7", "M+_raw  (positive bias)", f"{inp.m_raw_pos * _NC:+.3f}", "nC"),
         _step_row("7", "M-_raw  (negative bias)", f"{inp.m_raw_neg * _NC:+.3f}", "nC"),
-        _step_row("7", "M_raw  (calibration polarity)", f"{result.m_raw_ref * _NC:.3f}", "nC"),
+        _step_row("7", mraw_lbl, f"{result.m_raw_ref * _NC:.3f}", "nC",
+                  highlight=mraw_adjusted),
         _step_row("7", "P_pol = (|M+| + |M-|) / (2 x |M_cal|)", f"{result.p_pol:.3f}", "Eq. (9)"),
     ]
     story.append(_step_table(rows))
+    if mraw_adjusted:
+        S = _S()
+        story.append(Spacer(1, 0.03 * inch))
+        story.append(Paragraph(
+            "[*] Machine output adjustment was performed. The Reference Reading M_raw "
+            "shown above is the post-adjustment reading used for the final dose calculation. "
+            "Initial readings (M+_raw / M-_raw) were used for correction factor derivation only.",
+            S["warning"],
+        ))
     story.append(Spacer(1, 0.06 * inch))
 
     rows = [
@@ -519,8 +532,8 @@ def generate_photon_report(
     r_cav_cm: float = 0.0,
     notes: str = "",
     session_date: Optional[str] = None,
+    mraw_adjusted: bool = False,
 ) -> None:
-    """Photon beam calibration worksheet (TG-51 Worksheet A)."""
     """Photon beam calibration report (TG-51 / 2014 Addendum)."""
     doc = _doc(output_path)
     story = _photon_story_elements(
@@ -529,6 +542,7 @@ def generate_photon_report(
         chamber_sn=chamber_sn, electrometer_model=electrometer_model,
         electrometer_sn=electrometer_sn, r_cav_cm=r_cav_cm,
         notes=notes, session_date=session_date,
+        mraw_adjusted=mraw_adjusted,
     )
     doc.build(story)
 
@@ -550,6 +564,7 @@ def _electron_story_elements(
     notes: str = "",
     session_date: Optional[str] = None,
     cone: str = "10x10 cm",
+    mraw_adjusted: bool = False,
 ) -> list:
     """Return story elements for a single electron beam page (no doc.build)."""
     S = _S()
@@ -627,18 +642,30 @@ def _electron_story_elements(
 
     story.append(_section_header("SECTION 7  |  Polarity Correction  P_pol"))
     cal = "Positive (+)" if inp.calibration_polarity == "pos" else "Negative (-)"
+    mraw_lbl = ("M_raw  (calibration polarity)  [*OUTPUT ADJUSTED — see note]"
+                if mraw_adjusted else "M_raw  (calibration polarity)")
     rows = [
         _step_row("7", "Calibration polarity", cal, ""),
         _step_row("7", "M+_raw  (positive bias, at d_ref)",
                   f"{inp.m_raw_pos * _NC:+.3f}", "nC"),
         _step_row("7", "M-_raw  (negative bias, at d_ref)",
                   f"{inp.m_raw_neg * _NC:+.3f}", "nC"),
-        _step_row("7", "M_raw  (calibration polarity)",
-                  f"{result.m_raw_ref * _NC:.3f}", "nC"),
+        _step_row("7", mraw_lbl,
+                  f"{result.m_raw_ref * _NC:.3f}", "nC",
+                  highlight=mraw_adjusted),
         _step_row("7", "P_pol = (|M+| + |M-|) / (2 x |M_cal|)",
                   f"{result.p_pol:.3f}", "Eq. (9)"),
     ]
     story.append(_step_table(rows))
+    if mraw_adjusted:
+        S = _S()
+        story.append(Spacer(1, 0.03 * inch))
+        story.append(Paragraph(
+            "[*] Machine output adjustment was performed. The Reference Reading M_raw "
+            "shown above is the post-adjustment reading used for the final dose calculation. "
+            "Initial readings (M+_raw / M-_raw) were used for correction factor derivation only.",
+            S["warning"],
+        ))
     story.append(Spacer(1, 0.06 * inch))
 
     rows = [
@@ -725,6 +752,7 @@ def generate_electron_report(
     r_cav_cm: float = 0.0,
     notes: str = "",
     session_date: Optional[str] = None,
+    mraw_adjusted: bool = False,
 ) -> None:
     """Electron beam calibration report (TG-51 / 2024 Addendum Report 385)."""
     doc = _doc(output_path)
@@ -734,6 +762,7 @@ def generate_electron_report(
         chamber_sn=chamber_sn, electrometer_model=electrometer_model,
         electrometer_sn=electrometer_sn, r_cav_cm=r_cav_cm,
         notes=notes, session_date=session_date,
+        mraw_adjusted=mraw_adjusted,
     )
     doc.build(story)
 
@@ -939,15 +968,18 @@ def generate_full_session_report(
     for idx, item in enumerate(beam_results):
         beam, inp, result = item[0], item[1], item[2]
         field_info = item[3] if len(item) > 3 else {}
+        mraw_adj = field_info.get("mraw_adjusted", False)
         if beam.modality == "photon":
             page_elements = _photon_story_elements(
                 inp, result, **common_kw,
                 field_size=field_info.get("field_size", "10x10 cm"),
+                mraw_adjusted=mraw_adj,
             )
         else:
             page_elements = _electron_story_elements(
                 inp, result, **common_kw,
                 cone=field_info.get("cone", "10x10 cm"),
+                mraw_adjusted=mraw_adj,
             )
         story.extend(page_elements)
         if idx < len(beam_results) - 1:

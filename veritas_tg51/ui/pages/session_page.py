@@ -89,7 +89,7 @@ class TriplicateRow(QWidget):
 
         lay.addWidget(QLabel("→  avg ="))
         self.lbl_avg = QLabel("—")
-        self.lbl_avg.setFixedWidth(70)
+        self.lbl_avg.setMinimumWidth(95)
         self.lbl_avg.setStyleSheet("font-family: monospace; color: #1A5276;")
         lay.addWidget(self.lbl_avg)
 
@@ -335,6 +335,7 @@ class SessionPage(QWidget):
                         field_info = {"cone": tab.cmb_cone.currentText()}
                     else:
                         field_info = {"field_size": "10x10 cm"}
+                    field_info["mraw_adjusted"] = tab._mraw_adjusted
                     beam_results.append((tab._beam, tab._last_inp, tab._last_result, field_info))
             if not beam_results:
                 QMessageBox.warning(self, "No Results",
@@ -401,6 +402,7 @@ class EnergyTab(QScrollArea):
         self._last_inp = None
         self._last_result = None
         self._p_ion_override: Optional[float] = None
+        self._mraw_adjusted = False   # True when user has locked M_raw after cal adjustment
         self._restoring = False   # suppress re-entrant auto-saves during restore
         self.setWidgetResizable(True)
 
@@ -503,7 +505,7 @@ class EnergyTab(QScrollArea):
         tp_row.addWidget(self.spn_pressure)
 
         btn_mmhg = QPushButton("mmHg")
-        btn_mmhg.setFixedWidth(55); btn_mmhg.setObjectName("btnSecondary")
+        btn_mmhg.setMinimumWidth(65); btn_mmhg.setObjectName("btnSecondary")
         btn_mmhg.clicked.connect(self._enter_mmhg)
         tp_row.addWidget(btn_mmhg)
         tp_row.addSpacing(16)
@@ -757,7 +759,7 @@ class EnergyTab(QScrollArea):
         pion_row.addWidget(self.lbl_pion)
 
         btn_jaffe = QPushButton("Jaffé…")
-        btn_jaffe.setFixedWidth(65); btn_jaffe.setObjectName("btnSecondary")
+        btn_jaffe.setMinimumWidth(75); btn_jaffe.setObjectName("btnSecondary")
         btn_jaffe.clicked.connect(self._open_jaffe)
         pion_row.addSpacing(20); pion_row.addWidget(btn_jaffe)
         self.lbl_jaffe = QLabel("")
@@ -795,14 +797,14 @@ class EnergyTab(QScrollArea):
         mraw_lay.addWidget(self.txt_mraw_cal)
         mraw_lay.addWidget(QLabel("nC"))
 
-        hint = QLabel(
+        self.lbl_mraw_hint = QLabel(
             "  ← defaults to M⁺ average.  "
             "After machine output adjustment, enter the new reading here "
             "to confirm the calibration is correct — dose auto-recalculates."
         )
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color:#555; font-size:10px;")
-        mraw_lay.addWidget(hint)
+        self.lbl_mraw_hint.setWordWrap(True)
+        self.lbl_mraw_hint.setStyleSheet("color:#555; font-size:10px;")
+        mraw_lay.addWidget(self.lbl_mraw_hint)
         mraw_lay.addStretch()
         self._lay.addWidget(mraw_grp)
 
@@ -951,8 +953,9 @@ class EnergyTab(QScrollArea):
             self.txt_mhigh.setText(f"{ref_avg_nc:.4f}")
             self.txt_mhigh.blockSignals(False)
 
-        # M_raw cal reference syncs to the calibration polarity reading
-        if ref_avg_nc is not None and not self.txt_mraw_cal.hasFocus():
+        # M_raw cal reference syncs to the calibration polarity reading,
+        # but only if the user has NOT locked it with a calibration adjustment.
+        if ref_avg_nc is not None and not self.txt_mraw_cal.hasFocus() and not self._mraw_adjusted:
             self.txt_mraw_cal.blockSignals(True)
             self.txt_mraw_cal.setText(f"{ref_avg_nc:.4f}")
             self.txt_mraw_cal.blockSignals(False)
@@ -993,8 +996,30 @@ class EnergyTab(QScrollArea):
         self._try_auto_calc()
 
     def _on_mraw_cal_changed(self):
-        """User has manually edited M_raw — recalculate using the new value."""
+        """User has manually edited M_raw — lock it and recalculate."""
+        if not self._restoring:
+            text = self.txt_mraw_cal.text().strip()
+            self._mraw_adjusted = bool(text)
+            self._update_mraw_hint()
         self._try_auto_calc()
+
+    def _update_mraw_hint(self):
+        """Update the M_raw hint label and field style to reflect adjustment state."""
+        if self._mraw_adjusted:
+            self.lbl_mraw_hint.setText(
+                "  ✔ Calibration adjustment made — this reading is locked "
+                "and will not auto-update from M⁺."
+            )
+            self.lbl_mraw_hint.setStyleSheet("color:#B7700A; font-size:10px; font-weight:bold;")
+            self.txt_mraw_cal.setStyleSheet("background:#FEF9E7; font-family:monospace; border:1px solid #B7700A;")
+        else:
+            self.lbl_mraw_hint.setText(
+                "  ← defaults to M⁺ average.  "
+                "After machine output adjustment, enter the new reading here "
+                "to confirm the calibration is correct — dose auto-recalculates."
+            )
+            self.lbl_mraw_hint.setStyleSheet("color:#555; font-size:10px;")
+            self.txt_mraw_cal.setStyleSheet("background:#EBF5FB; font-family:monospace;")
 
     def _get_mraw_cal_c(self) -> Optional[float]:
         """Return the M_raw reference value in Coulombs (from txt_mraw_cal or M⁺ fallback)."""
@@ -1060,18 +1085,27 @@ class EnergyTab(QScrollArea):
             clinical_tmr=pdd_tmr if (pdd_tmr > 0.0 and is_sad) else None,
         )
         result = calculate_photon(inp)
-        self._last_inp = inp; self._last_result = result
 
         # Post-calc M_raw override: scales dose only, correction factors unchanged.
         m_raw_override = self._get_mraw_cal_c()
-        override_ratio = (m_raw_override / abs(m_pos)) if (m_raw_override is not None and m_pos != 0) else 1.0
+        if m_raw_override is not None and result.m_raw_ref != 0:
+            override_ratio = m_raw_override / abs(result.m_raw_ref)
+            if override_ratio != 1.0:
+                result.m_raw_ref *= override_ratio
+                result.m_corrected *= override_ratio
+                result.dose_10cm_gy *= override_ratio
+                result.dose_10cm_cgy_per_mu *= override_ratio
+                if result.dose_dmax_cgy_per_mu is not None:
+                    result.dose_dmax_cgy_per_mu *= override_ratio
+
+        self._last_inp = inp; self._last_result = result
 
         # Beam quality label — show method applied
         _method = result.pdd10x_method
         _tag = " [Eq.15]" if _method == "addendum_eq15" else (" [FFF]" if _method == "fff_direct" else "")
         self.lbl_pdd10x.setText(f"{result.pdd10x:.2f} %{_tag}")
         self.lbl_kq.setText(f"{result.k_q:.3f}")
-        self._show_results_photon(result, override_ratio)
+        self._show_results_photon(result)
 
     def _calc_electron(self):
         from ...physics.tg51_electron import ElectronCalibrationInput, calculate_electron
@@ -1119,13 +1153,22 @@ class EnergyTab(QScrollArea):
             clinical_pdd_at_dref_pct=pdd_tmr if pdd_tmr > 0 else None,
         )
         result = calculate_electron(inp)
-        self._last_inp = inp; self._last_result = result
 
         # Post-calc M_raw override: scales dose only, correction factors unchanged.
         m_raw_override = self._get_mraw_cal_c()
-        override_ratio = (m_raw_override / abs(m_pos)) if (m_raw_override is not None and m_pos != 0) else 1.0
+        if m_raw_override is not None and result.m_raw_ref != 0:
+            override_ratio = m_raw_override / abs(result.m_raw_ref)
+            if override_ratio != 1.0:
+                result.m_raw_ref *= override_ratio
+                result.m_corrected *= override_ratio
+                result.dose_dref_gy *= override_ratio
+                result.dose_dref_cgy_per_mu *= override_ratio
+                if result.dose_dmax_cgy_per_mu is not None:
+                    result.dose_dmax_cgy_per_mu *= override_ratio
 
-        self._show_results_electron(result, override_ratio)
+        self._last_inp = inp; self._last_result = result
+
+        self._show_results_electron(result)
 
     # ------------------------------------------------------------------
     # Result display
@@ -1137,24 +1180,23 @@ class EnergyTab(QScrollArea):
         sign = "+" if err >= 0 else ""
         return f"{sign}{err:.1f}%"
 
-    def _show_results_photon(self, result, override_ratio: float = 1.0):
+    def _show_results_photon(self, result):
         self.lbl_res_ptp.setText(f"{result.p_tp:.3f}")
         self.lbl_res_ppol.setText(f"{result.p_pol:.3f}")
         self.lbl_res_pion.setText(f"{result.p_ion:.3f}")
         self.lbl_res_pleak.setText(f"{result.p_leak:.3f}")
         self.lbl_res_kq.setText(f"{result.k_q:.3f}")
         self.lbl_mcorr.setText(f"{result.m_corrected:.3E} C")
-        dose = result.dose_10cm_cgy_per_mu * override_ratio
-        self.lbl_dose.setText(f"{dose:.3f} cGy/MU")
+        self.lbl_dose.setText(f"{result.dose_10cm_cgy_per_mu:.3f} cGy/MU")
         if result.dose_dmax_cgy_per_mu is not None:
-            dmax = result.dose_dmax_cgy_per_mu * override_ratio
+            dmax = result.dose_dmax_cgy_per_mu
             self.lbl_dmax.setText(f"{dmax:.3f} cGy/MU  ({self._pct_err(dmax)})")
         else:
             self.lbl_dmax.setText("—")
         self.lbl_warnings.setText("[!]  " + "\n[!]  ".join(result.warnings) if result.warnings else "")
         self.btn_save.setEnabled(True); self.btn_pdf.setEnabled(True)
 
-    def _show_results_electron(self, result, override_ratio: float = 1.0):
+    def _show_results_electron(self, result):
         self.lbl_res_ptp.setText(f"{result.p_tp:.3f}")
         self.lbl_res_ppol.setText(f"{result.p_pol:.3f}")
         self.lbl_res_pion.setText(f"{result.p_ion:.3f}")
@@ -1163,10 +1205,9 @@ class EnergyTab(QScrollArea):
             f"{result.k_q:.3f}  (k_Qecal={result.k_qecal:.3f}, k'_Q={result.k_q_prime:.3f})"
         )
         self.lbl_mcorr.setText(f"{result.m_corrected:.3E} C")
-        dose = result.dose_dref_cgy_per_mu * override_ratio
-        self.lbl_dose.setText(f"{dose:.3f} cGy/MU")
+        self.lbl_dose.setText(f"{result.dose_dref_cgy_per_mu:.3f} cGy/MU")
         if result.dose_dmax_cgy_per_mu is not None:
-            dmax = result.dose_dmax_cgy_per_mu * override_ratio
+            dmax = result.dose_dmax_cgy_per_mu
             self.lbl_dmax.setText(f"{dmax:.3f} cGy/MU  ({self._pct_err(dmax)})")
         else:
             self.lbl_dmax.setText("—")
@@ -1215,6 +1256,7 @@ class EnergyTab(QScrollArea):
             "v_h":          self.spn_vh.value(),
             "v_l":          self.spn_vl.value(),
             "m_raw_cal":    self.txt_mraw_cal.text(),
+            "mraw_adjusted": self._mraw_adjusted,
             "m_leak":       self.txt_mleak.text(),
             "pdd_tmr":      self.txt_pdd_tmr.text(),
             "p_ion_override": self._p_ion_override,
@@ -1260,7 +1302,10 @@ class EnergyTab(QScrollArea):
 
             self.spn_vh.setValue(state.get("v_h", 300.0))
             self.spn_vl.setValue(state.get("v_l", 150.0))
+            # Restore adjustment flag BEFORE setting text so _update_ppol won't overwrite it
+            self._mraw_adjusted = state.get("mraw_adjusted", False)
             self.txt_mraw_cal.setText(state.get("m_raw_cal", ""))
+            self._update_mraw_hint()
             self.txt_mleak.setText(state.get("m_leak", "0"))
             self.txt_pdd_tmr.setText(state.get("pdd_tmr", "0"))
             if self._beam.modality == "electron" and "cone" in state:
@@ -1343,10 +1388,12 @@ class EnergyTab(QScrollArea):
             )
             if self._beam.modality == "photon":
                 from ...reports.pdf_generator import generate_photon_report
-                generate_photon_report(self._last_inp, self._last_result, path, **common)
+                generate_photon_report(self._last_inp, self._last_result, path,
+                                       mraw_adjusted=self._mraw_adjusted, **common)
             else:
                 from ...reports.pdf_generator import generate_electron_report
-                generate_electron_report(self._last_inp, self._last_result, path, **common)
+                generate_electron_report(self._last_inp, self._last_result, path,
+                                         mraw_adjusted=self._mraw_adjusted, **common)
             QMessageBox.information(self, "PDF Saved", f"Report saved to:\n{path}")
         except Exception as e:
             QMessageBox.critical(self, "Report Error", str(e))
