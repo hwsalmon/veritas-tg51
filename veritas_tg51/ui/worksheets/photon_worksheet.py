@@ -287,7 +287,7 @@ class PhotonWorksheet(QWidget):
             "FFF beams require lead foil regardless of energy (Report 374 §3.3)."
         )
         lbl_note.setWordWrap(True)
-        lbl_note.setStyleSheet("color: #7D6608; font-size: 11px; font-style: italic;")
+        lbl_note.setObjectName("noteLabel")
         lay.addWidget(lbl_note)
 
         self.main_layout.addWidget(grp)
@@ -452,9 +452,7 @@ class PhotonWorksheet(QWidget):
         jaffe_row.addWidget(self.btn_jaffe)
 
         self.lbl_jaffe_pion = QLabel("")
-        self.lbl_jaffe_pion.setStyleSheet(
-            "color: #1A5276; font-size: 11px; margin-left: 8px;"
-        )
+        self.lbl_jaffe_pion.setObjectName("infoLabel")
         jaffe_row.addWidget(self.lbl_jaffe_pion)
 
         self.btn_clear_jaffe = QPushButton("Clear Jaffé Override")
@@ -486,7 +484,7 @@ class PhotonWorksheet(QWidget):
         self.spn_mleak.valueChanged.connect(self._update_pleak_label)
         leak_row.addWidget(self.spn_mleak)
         self.lbl_pleak = QLabel("P_leak = 1.0000")
-        self.lbl_pleak.setStyleSheet("color: #555; font-size: 11px; margin-left: 8px;")
+        self.lbl_pleak.setObjectName("dimLabel")
         leak_row.addWidget(self.lbl_pleak)
         leak_row.addStretch()
         lay.addLayout(leak_row)

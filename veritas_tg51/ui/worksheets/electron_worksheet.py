@@ -81,10 +81,7 @@ class ElectronWorksheet(QWidget):
             "Results are expected to be ~1–2% higher than the 1999 TG-51 protocol."
         )
         notice.setWordWrap(True)
-        notice.setStyleSheet(
-            "background-color: #EBF5FB; color: #1A5276; font-size: 11px; "
-            "padding: 8px 16px; border-bottom: 1px solid #AED6F1;"
-        )
+        notice.setObjectName("infoNotice")
         outer.addWidget(notice)
 
         scroll = QScrollArea()
@@ -223,10 +220,7 @@ class ElectronWorksheet(QWidget):
             "ONLY during PDI scanning to find I_50."
         )
         pos_note.setWordWrap(True)
-        pos_note.setStyleSheet(
-            "color: #154360; background-color: #D6EAF8; border-radius: 4px; "
-            "padding: 6px 10px; font-size: 11px;"
-        )
+        pos_note.setObjectName("posNote")
         lay.addWidget(pos_note)
 
         self.main_layout.addWidget(grp)
@@ -244,7 +238,7 @@ class ElectronWorksheet(QWidget):
             "Then convert I_50 → R_50 using Eq. (3) below."
         )
         epom_note.setWordWrap(True)
-        epom_note.setStyleSheet("color: #555; font-size: 11px; font-style: italic;")
+        epom_note.setObjectName("dimLabel")
         lay.addWidget(epom_note)
 
         self.row_i50 = FieldRow(
@@ -476,7 +470,7 @@ class ElectronWorksheet(QWidget):
         self.spn_mleak.valueChanged.connect(self._update_pleak_label)
         leak_row.addWidget(self.spn_mleak)
         self.lbl_pleak = QLabel("P_leak = 1.0000")
-        self.lbl_pleak.setStyleSheet("color: #555; font-size: 11px; margin-left: 8px;")
+        self.lbl_pleak.setObjectName("dimLabel")
         leak_row.addWidget(self.lbl_pleak)
         leak_row.addStretch()
         lay.addLayout(leak_row)
@@ -555,7 +549,7 @@ class ElectronWorksheet(QWidget):
             "errors >8% in electron beam calibrations (Report 374 §2.4.3)."
         )
         dmax_warn.setWordWrap(True)
-        dmax_warn.setStyleSheet("color: #7D6608; font-size: 11px; font-style: italic;")
+        dmax_warn.setObjectName("noteLabel")
         lay.addWidget(dmax_warn)
 
         self.main_layout.addWidget(grp)

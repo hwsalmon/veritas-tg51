@@ -297,6 +297,59 @@ QWidget#filterBar {
     background-color: #F0F3F4;
     border-bottom: 1px solid #D5D8DC;
 }
+
+/* ── Themed inline labels (must use objectName) ── */
+QLabel#noteLabel {
+    color: #7D6608;
+    font-size: 11px;
+    font-style: italic;
+}
+QLabel#infoLabel {
+    color: #1A5276;
+    font-size: 11px;
+    margin-left: 8px;
+}
+QLabel#dimLabel {
+    color: #7A8899;
+    font-size: 11px;
+    font-style: italic;
+}
+QLabel#infoNotice {
+    background-color: #EBF5FB;
+    color: #1A5276;
+    font-size: 11px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #AED6F1;
+}
+QLabel#posNote {
+    color: #154360;
+    background-color: #D6EAF8;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+QLabel#saveStatus {
+    color: #888;
+    font-size: 10px;
+    padding: 2px 10px;
+}
+
+/* ── Theme toggle button in header ── */
+QPushButton#btnTheme {
+    background-color: transparent;
+    color: #C8D6E5;
+    border: 1px solid #3D4A5C;
+    border-radius: 14px;
+    padding: 2px 8px;
+    font-size: 16px;
+    min-height: 28px;
+    min-width: 36px;
+    font-weight: normal;
+}
+QPushButton#btnTheme:hover {
+    background-color: #1E3050;
+    border-color: #4DA6FF;
+}
 """
 
 DARK_STYLESHEET = """
@@ -606,5 +659,58 @@ QDoubleSpinBox::up-button, QSpinBox::up-button,
 QDoubleSpinBox::down-button, QSpinBox::down-button {
     background-color: #3D4A5C;
     border: none;
+}
+
+/* ── Themed inline labels (must use objectName) ── */
+QLabel#noteLabel {
+    color: #D4A010;
+    font-size: 11px;
+    font-style: italic;
+}
+QLabel#infoLabel {
+    color: #7CC8FF;
+    font-size: 11px;
+    margin-left: 8px;
+}
+QLabel#dimLabel {
+    color: #7A8899;
+    font-size: 11px;
+    font-style: italic;
+}
+QLabel#infoNotice {
+    background-color: #1A2E42;
+    color: #7CC8FF;
+    font-size: 11px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #2E5070;
+}
+QLabel#posNote {
+    color: #7CC8FF;
+    background-color: #1A2E42;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+QLabel#saveStatus {
+    color: #6B7A8A;
+    font-size: 10px;
+    padding: 2px 10px;
+}
+
+/* ── Theme toggle button in header ── */
+QPushButton#btnTheme {
+    background-color: transparent;
+    color: #C8D6E5;
+    border: 1px solid #3D4A5C;
+    border-radius: 14px;
+    padding: 2px 8px;
+    font-size: 16px;
+    min-height: 28px;
+    min-width: 36px;
+    font-weight: normal;
+}
+QPushButton#btnTheme:hover {
+    background-color: #252B3B;
+    border-color: #4DA6FF;
 }
 """

@@ -50,9 +50,9 @@ _SETTINGS_PATH = pathlib.Path.home() / ".config" / "veritas_tg51" / "settings.js
 
 
 NAV_ITEMS = [
-    ("New Session",      "Start a new calibration session for a treatment machine"),
+    ("Current Session",  "Active calibration session"),
     ("Session History",  "Previous calibration records"),
-    ("Equipment",        "Chambers, electrometers, machines"),
+    ("Configuration",    "Chambers, electrometers, machines"),
 ]
 
 _SESSION_PAGE_IDX = 0
@@ -135,6 +135,15 @@ class MainWindow(QMainWindow):
         lbl_proto.setStyleSheet("color: #5D7FA3; font-size: 11px;")
         layout.addWidget(lbl_proto)
 
+        layout.addSpacing(12)
+
+        self._btn_theme = QPushButton("🌙")
+        self._btn_theme.setObjectName("btnTheme")
+        self._btn_theme.setToolTip("Toggle dark / light mode  (Ctrl+Shift+D)")
+        self._btn_theme.setFixedSize(36, 30)
+        self._btn_theme.clicked.connect(self._toggle_dark_mode_btn)
+        layout.addWidget(self._btn_theme)
+
         # Store references for theme switching
         self._header_widget = header
         self._lbl_proto = lbl_proto
@@ -167,6 +176,14 @@ class MainWindow(QMainWindow):
         line.setFrameShape(QFrame.HLine)
         line.setStyleSheet("color: #cccccc;")
         layout.addWidget(line)
+
+        # New Session button
+        self.btn_new_session = QPushButton("New Session…")
+        self.btn_new_session.setObjectName("btnSecondary")
+        self.btn_new_session.setToolTip("Save current session and start a new calibration")
+        self.btn_new_session.setFixedHeight(34)
+        self.btn_new_session.clicked.connect(self._start_new_session)
+        layout.addWidget(self.btn_new_session)
 
         # Print Full Report button
         self.btn_full_report = QPushButton("Print Full Report")
@@ -313,14 +330,25 @@ class MainWindow(QMainWindow):
         if dark:
             self._header_widget.setStyleSheet("background-color: #0A0F1C;")
             self._lbl_proto.setStyleSheet("color: #3A5070; font-size: 11px;")
+            if hasattr(self, '_btn_theme'):
+                self._btn_theme.setText("☀")
+                self._btn_theme.setToolTip("Switch to light mode  (Ctrl+Shift+D)")
         else:
             self._header_widget.setStyleSheet("background-color: #0D1B2E;")
             self._lbl_proto.setStyleSheet("color: #5D7FA3; font-size: 11px;")
+            if hasattr(self, '_btn_theme'):
+                self._btn_theme.setText("🌙")
+                self._btn_theme.setToolTip("Switch to dark mode  (Ctrl+Shift+D)")
 
     def _toggle_dark_mode(self, checked: bool):
         self._dark_mode = checked
         self._save_setting("dark_mode", checked)
+        if hasattr(self, 'act_dark_mode'):
+            self.act_dark_mode.setChecked(checked)
         self._apply_theme()
+
+    def _toggle_dark_mode_btn(self):
+        self._toggle_dark_mode(not self._dark_mode)
 
     def _print_full_report(self):
         """Delegate to the current session page's print_full_report method."""

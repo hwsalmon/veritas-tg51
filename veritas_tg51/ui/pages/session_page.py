@@ -170,21 +170,6 @@ class SessionPage(QWidget):
         lbl.setTextFormat(Qt.RichText)
         h_lay.addWidget(lbl)
         h_lay.addStretch()
-
-        btn_new = QPushButton("New Session…")
-        btn_new.setFixedWidth(110)
-        btn_new.setStyleSheet(
-            "background:#2E4A7A; color:white; border:1px solid #4A6A9A; "
-            "padding:3px 8px; border-radius:3px;"
-        )
-        # parent main window handles this via Ctrl+N / menu; wire via signal
-        from PySide6.QtWidgets import QApplication
-        btn_new.clicked.connect(
-            lambda: QApplication.instance().activeWindow()._start_new_session()
-            if hasattr(QApplication.instance().activeWindow(), '_start_new_session')
-            else None
-        )
-        h_lay.addWidget(btn_new)
         layout.addWidget(header)
 
         # ── Tabs ──
@@ -196,9 +181,7 @@ class SessionPage(QWidget):
 
         # ── Auto-save status strip ──
         self._lbl_save_status = QLabel("  Not yet saved")
-        self._lbl_save_status.setStyleSheet(
-            "color: #888; font-size: 10px; padding: 2px 10px;"
-        )
+        self._lbl_save_status.setObjectName("saveStatus")
         layout.addWidget(self._lbl_save_status)
 
     def _load_beam_energies(self):
