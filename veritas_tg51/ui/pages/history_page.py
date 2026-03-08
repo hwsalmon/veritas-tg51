@@ -98,7 +98,7 @@ class HistoryPage(QWidget):
         s_lay.setSpacing(0)
 
         s_bar = QWidget()
-        s_bar.setStyleSheet("background-color: #F0F3F4; border-bottom: 1px solid #D5D8DC;")
+        s_bar.setObjectName("sessionsBar")
         sb_lay = QHBoxLayout(s_bar)
         sb_lay.setContentsMargins(12, 8, 12, 8)
         self.lbl_sessions_count = QLabel("0 sessions")
@@ -145,7 +145,7 @@ class HistoryPage(QWidget):
         r_lay.setSpacing(0)
 
         filter_bar = QWidget()
-        filter_bar.setStyleSheet("background-color: #F0F3F4; border-bottom: 1px solid #D5D8DC;")
+        filter_bar.setObjectName("filterBar")
         f_lay = QHBoxLayout(filter_bar)
         f_lay.setContentsMargins(12, 8, 12, 8)
         f_lay.addWidget(QLabel("Show:"))

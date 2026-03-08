@@ -21,6 +21,9 @@ Pages:
 
 from __future__ import annotations
 
+import json
+import pathlib
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont, QIcon
 from PySide6.QtWidgets import (
@@ -41,6 +44,9 @@ from PySide6.QtWidgets import (
 
 from .pages.history_page import HistoryPage
 from .pages.equipment_page import EquipmentPage
+from .styles import MAIN_STYLESHEET, DARK_STYLESHEET
+
+_SETTINGS_PATH = pathlib.Path.home() / ".config" / "veritas_tg51" / "settings.json"
 
 
 NAV_ITEMS = [
@@ -57,8 +63,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Veritas TG-51  —  Absolute Dosimetry Calibration")
         self.setMinimumSize(1100, 750)
+        self._dark_mode = self._load_setting("dark_mode", False)
         self._build_ui()
         self._build_menu()
+        self._apply_theme()
 
     # ------------------------------------------------------------------
     # UI
@@ -126,6 +134,10 @@ class MainWindow(QMainWindow):
         )
         lbl_proto.setStyleSheet("color: #5D7FA3; font-size: 11px;")
         layout.addWidget(lbl_proto)
+
+        # Store references for theme switching
+        self._header_widget = header
+        self._lbl_proto = lbl_proto
 
         return header
 
@@ -240,6 +252,15 @@ class MainWindow(QMainWindow):
         act_equip.triggered.connect(lambda: self._navigate(2))
         tools_menu.addAction(act_equip)
 
+        # View
+        view_menu = mb.addMenu("&View")
+        self.act_dark_mode = QAction("Dark Mode", self)
+        self.act_dark_mode.setCheckable(True)
+        self.act_dark_mode.setChecked(self._dark_mode)
+        self.act_dark_mode.setShortcut("Ctrl+Shift+D")
+        self.act_dark_mode.triggered.connect(self._toggle_dark_mode)
+        view_menu.addAction(self.act_dark_mode)
+
         # Help
         help_menu = mb.addMenu("&Help")
         act_about = QAction("About Veritas TG-51", self)
@@ -249,6 +270,57 @@ class MainWindow(QMainWindow):
         act_refs = QAction("Protocol References", self)
         act_refs.triggered.connect(self._show_references)
         help_menu.addAction(act_refs)
+
+    # ------------------------------------------------------------------
+    # Theme / settings
+    # ------------------------------------------------------------------
+
+    def _load_setting(self, key: str, default):
+        try:
+            if _SETTINGS_PATH.exists():
+                data = json.loads(_SETTINGS_PATH.read_text())
+                return data.get(key, default)
+        except Exception:
+            pass
+        return default
+
+    def _save_setting(self, key: str, value):
+        try:
+            _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if _SETTINGS_PATH.exists():
+                try:
+                    data = json.loads(_SETTINGS_PATH.read_text())
+                except Exception:
+                    pass
+            data[key] = value
+            _SETTINGS_PATH.write_text(json.dumps(data, indent=2))
+        except Exception:
+            pass
+
+    def _apply_theme(self):
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if self._dark_mode:
+            app.setStyleSheet(DARK_STYLESHEET)
+            self._update_header_for_dark(True)
+        else:
+            app.setStyleSheet(MAIN_STYLESHEET)
+            self._update_header_for_dark(False)
+
+    def _update_header_for_dark(self, dark: bool):
+        """Update header widget colors to match the current theme."""
+        if dark:
+            self._header_widget.setStyleSheet("background-color: #0A0F1C;")
+            self._lbl_proto.setStyleSheet("color: #3A5070; font-size: 11px;")
+        else:
+            self._header_widget.setStyleSheet("background-color: #0D1B2E;")
+            self._lbl_proto.setStyleSheet("color: #5D7FA3; font-size: 11px;")
+
+    def _toggle_dark_mode(self, checked: bool):
+        self._dark_mode = checked
+        self._save_setting("dark_mode", checked)
+        self._apply_theme()
 
     def _print_full_report(self):
         """Delegate to the current session page's print_full_report method."""
@@ -282,17 +354,19 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            dlg = NewSessionDialog(self)
-            from PySide6.QtWidgets import QDialog
-            if dlg.exec() != QDialog.Accepted or dlg.setup is None:
-                return
-
-            # Save the current session before replacing it
+            # Save the current session before opening the wizard
             old = self.stack.widget(0)
             if hasattr(old, "_save_timer") and hasattr(old, "_do_autosave"):
                 if old._save_timer.isActive():
                     old._save_timer.stop()
                 old._do_autosave()
+
+            dlg = NewSessionDialog(self)
+            from PySide6.QtWidgets import QDialog
+            if dlg.exec() != QDialog.Accepted or dlg.setup is None:
+                return
+
+            old = self.stack.widget(0)
 
             # Replace whatever is at stack index 0
             self.stack.removeWidget(old)

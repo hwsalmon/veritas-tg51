@@ -18,7 +18,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 
 from veritas_tg51.ui.main_window import MainWindow
-from veritas_tg51.ui.styles import MAIN_STYLESHEET
 from veritas_tg51.models.entities import init_db
 from veritas_tg51.models import db as db_mod
 
@@ -33,7 +32,6 @@ def main():
     app.setApplicationName("Veritas TG-51")
     app.setOrganizationName("Medical Physics")
     app.setApplicationVersion("1.0.0")
-    app.setStyleSheet(MAIN_STYLESHEET)
     _icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "icon.png")
     if os.path.exists(_icon_path):
         app.setWindowIcon(QIcon(_icon_path))
