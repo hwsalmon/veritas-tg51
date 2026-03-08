@@ -25,7 +25,7 @@ import json
 import pathlib
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QFont, QIcon
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPalette
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -56,6 +56,49 @@ NAV_ITEMS = [
 ]
 
 _SESSION_PAGE_IDX = 0
+
+
+def _make_dark_palette() -> QPalette:
+    """Build a QPalette that makes Fusion-style native rendering dark.
+
+    Qt's Fusion style uses QPalette colours for painting widget frames,
+    menu bars, scroll bars, and other chrome that stylesheets alone cannot
+    fully override.  Setting this palette alongside DARK_STYLESHEET ensures
+    consistent dark rendering across all widget types.
+    """
+    R = QPalette.ColorRole
+    p = QPalette()
+    roles = {
+        R.Window:          "#1A1F2E",
+        R.WindowText:      "#C0C8D8",
+        R.Base:            "#1E2535",
+        R.AlternateBase:   "#232A3A",
+        R.ToolTipBase:     "#1E2535",
+        R.ToolTipText:     "#C0C8D8",
+        R.Text:            "#C0C8D8",
+        R.Button:          "#1E2535",
+        R.ButtonText:      "#FFFFFF",
+        R.BrightText:      "#FFFFFF",
+        R.Highlight:       "#1E5E8A",
+        R.HighlightedText: "#FFFFFF",
+        R.Light:           "#2A3040",
+        R.Midlight:        "#242B3A",
+        R.Dark:            "#141824",
+        R.Mid:             "#1A1F2E",
+        R.Shadow:          "#0A0F1C",
+        R.Link:            "#4DA6FF",
+        R.LinkVisited:     "#7CC8FF",
+    }
+    for role, hex_color in roles.items():
+        p.setColor(role, QColor(hex_color))
+    return p
+
+
+def _make_light_palette() -> QPalette:
+    """Return the default Fusion light palette."""
+    from PySide6.QtWidgets import QApplication, QStyleFactory
+    style = QStyleFactory.create("Fusion")
+    return style.standardPalette() if style else QApplication.style().standardPalette()
 
 
 class MainWindow(QMainWindow):
@@ -321,9 +364,11 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if self._dark_mode:
             app.setStyleSheet(DARK_STYLESHEET)
+            app.setPalette(_make_dark_palette())
             self._update_header_for_dark(True)
         else:
             app.setStyleSheet(MAIN_STYLESHEET)
+            app.setPalette(_make_light_palette())
             self._update_header_for_dark(False)
 
     def _update_header_for_dark(self, dark: bool):
