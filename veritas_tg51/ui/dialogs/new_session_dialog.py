@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QSizePolicy,
     QVBoxLayout,
 )
 
@@ -55,7 +56,7 @@ class NewSessionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Calibration Session")
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(600)
         self.setup: Optional[SessionSetup] = None
         self._build_ui()
 
@@ -68,37 +69,53 @@ class NewSessionDialog(QDialog):
         layout.setSpacing(14)
         layout.setContentsMargins(20, 20, 20, 20)
 
+        _fixed_v = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
         # ── Institution & Machine ──
-        site_grp = QGroupBox("Institution & Treatment Machine")
+        site_grp = QGroupBox("Institution && Treatment Machine")
+        site_grp.setSizePolicy(_fixed_v)
         site_form = QFormLayout(site_grp)
-        site_form.setSpacing(10)
+        site_form.setSpacing(8)
+        site_form.setContentsMargins(10, 6, 10, 10)
 
         self.cmb_center = QComboBox()
+        self.cmb_center.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_center.setMaxVisibleItems(20)
         self.cmb_center.currentIndexChanged.connect(self._on_center_changed)
         site_form.addRow("Institution:", self.cmb_center)
 
         self.cmb_linac = QComboBox()
+        self.cmb_linac.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_linac.setMaxVisibleItems(20)
         site_form.addRow("Treatment machine:", self.cmb_linac)
 
         layout.addWidget(site_grp)
 
         # ── Instrumentation ──
         inst_grp = QGroupBox("Instrumentation")
+        inst_grp.setSizePolicy(_fixed_v)
         inst_form = QFormLayout(inst_grp)
-        inst_form.setSpacing(10)
+        inst_form.setSpacing(8)
+        inst_form.setContentsMargins(10, 6, 10, 10)
 
         self.cmb_chamber = QComboBox()
+        self.cmb_chamber.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_chamber.setMaxVisibleItems(20)
         inst_form.addRow("Ion chamber:", self.cmb_chamber)
 
         self.cmb_electrometer = QComboBox()
+        self.cmb_electrometer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_electrometer.setMaxVisibleItems(20)
         inst_form.addRow("Electrometer:", self.cmb_electrometer)
 
         layout.addWidget(inst_grp)
 
         # ── Session info ──
         info_grp = QGroupBox("Session Information")
+        info_grp.setSizePolicy(_fixed_v)
         info_form = QFormLayout(info_grp)
-        info_form.setSpacing(10)
+        info_form.setSpacing(8)
+        info_form.setContentsMargins(10, 6, 10, 10)
 
         self.txt_physicist = QLineEdit()
         self.txt_physicist.setPlaceholderText("Name of performing physicist")

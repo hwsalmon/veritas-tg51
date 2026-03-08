@@ -122,6 +122,7 @@ class _TableTab(QWidget):
         toolbar.addStretch()
         toolbar.addWidget(self.lbl_count)
         layout.addLayout(toolbar)
+        self._toolbar = toolbar  # exposed so subclasses can insert extra buttons
 
         # Table
         self.table = QTableWidget()
@@ -312,13 +313,19 @@ class _LinacsTab(_TableTab):
     data_changed = __import__('PySide6.QtCore', fromlist=['Signal']).Signal()
 
     def __init__(self, parent=None):
-        super().__init__(["ID", "Center", "Manufacturer", "Model", "Name", "S/N", "Notes"], parent)
+        super().__init__(["ID", "Institution", "Manufacturer", "Model", "Name", "S/N", "Notes"], parent)
         self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 140)
+        self.table.setColumnWidth(1, 160)
         self.table.setColumnWidth(2, 110)
         self.table.setColumnWidth(3, 110)
         self.table.setColumnWidth(4, 110)
         self.table.setColumnWidth(5, 100)
+
+        # Clone button — inserted before the stretch (index 4 in the toolbar)
+        self.btn_clone = QPushButton("Clone")
+        self.btn_clone.setFixedWidth(70)
+        self.btn_clone.clicked.connect(self._clone)
+        self._toolbar.insertWidget(4, self.btn_clone)
 
     def refresh(self):
         from ...models.db import get_session, is_ready
@@ -347,7 +354,7 @@ class _LinacsTab(_TableTab):
     def _add(self):
         centers = self._get_centers()
         if not centers:
-            QMessageBox.warning(self, "No Centers", "Add a Center first.")
+            QMessageBox.warning(self, "No Institutions", "Add an Institution first.")
             return
         dlg = _LinacDialog(centers=centers, parent=self)
         if dlg.exec() == QDialog.Accepted:
@@ -428,6 +435,129 @@ class _LinacsTab(_TableTab):
             return [(c.id, c.name) for c in session.scalars(select(Center).order_by(Center.name)).all()]
         finally:
             session.close()
+
+    def _clone(self):
+        rec_id = self._selected_id()
+        if rec_id is None:
+            QMessageBox.information(self, "No Selection", "Select a linac to clone.")
+            return
+        centers = self._get_centers()
+        if not centers:
+            QMessageBox.warning(self, "No Institutions", "Add an Institution first.")
+            return
+
+        from ...models.db import get_session
+        from ...models.entities import Linac, BeamEnergy
+        session = get_session()
+        try:
+            src = session.get(Linac, rec_id)
+            if not src:
+                return
+            src_data = {
+                "center_id": src.center_id,
+                "manufacturer": src.manufacturer,
+                "model": src.model,
+                "name": src.name,
+                "serial_number": src.serial_number,
+                "notes": src.notes,
+            }
+            beams = [
+                {
+                    "modality": b.modality, "energy_mv": b.energy_mv, "is_fff": b.is_fff,
+                    "label": b.label, "pdd_shift_pct": b.pdd_shift_pct,
+                    "clinical_pdd_pct": b.clinical_pdd_pct, "i50_cm": b.i50_cm,
+                }
+                for b in src.beam_energies
+            ]
+        finally:
+            session.close()
+
+        dlg = _CloneLinacDialog(centers=centers, src_data=src_data, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        new_data = dlg.get_data()
+        session = get_session()
+        try:
+            new_linac = Linac(**new_data)
+            session.add(new_linac)
+            session.flush()  # get new_linac.id
+            for b in beams:
+                session.add(BeamEnergy(linac_id=new_linac.id, **b))
+            session.commit()
+        finally:
+            session.close()
+
+        self.refresh()
+        self.data_changed.emit()
+        QMessageBox.information(
+            self, "Cloned",
+            f"Machine '{new_data['name']}' created with {len(beams)} beam energ{'y' if len(beams)==1 else 'ies'}."
+        )
+
+
+class _CloneLinacDialog(QDialog):
+    """Clone a linac to a (possibly different) institution with a new name/SN."""
+
+    def __init__(self, centers: list[tuple[int, str]], src_data: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Clone Treatment Machine")
+        self.setMinimumWidth(400)
+        form = QFormLayout(self)
+
+        # Source info (read-only label)
+        src_label = QLabel(
+            f"{src_data['manufacturer']} {src_data['model']}  —  {src_data['name']}"
+        )
+        src_label.setStyleSheet("font-weight: bold; color: #1B2A4A;")
+        form.addRow("Cloning:", src_label)
+
+        self.cmb_center = QComboBox()
+        for cid, cname in centers:
+            self.cmb_center.addItem(cname, cid)
+        # Pre-select the source institution
+        for i in range(self.cmb_center.count()):
+            if self.cmb_center.itemData(i) == src_data["center_id"]:
+                self.cmb_center.setCurrentIndex(i)
+        form.addRow("Target institution *:", self.cmb_center)
+
+        self.txt_name = QLineEdit(src_data["name"])
+        self.txt_name.setPlaceholderText("Name for the new machine")
+        form.addRow("Machine name *:", self.txt_name)
+
+        self.txt_sn = QLineEdit("")
+        self.txt_sn.setPlaceholderText("Serial number of the new machine (optional)")
+        form.addRow("Serial number:", self.txt_sn)
+
+        self.txt_notes = QLineEdit(src_data.get("notes") or "")
+        form.addRow("Notes:", self.txt_notes)
+
+        form.addRow(QLabel(
+            "All beam energies will be copied to the new machine."
+        ))
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(self._validate)
+        btns.rejected.connect(self.reject)
+        form.addRow(btns)
+
+        self._src_data = src_data
+
+    def _validate(self):
+        if not self.txt_name.text().strip():
+            QMessageBox.warning(self, "Required", "Machine name is required.")
+            return
+        self.accept()
+
+    def get_data(self) -> dict:
+        return {
+            "center_id": self.cmb_center.currentData(),
+            "manufacturer": self._src_data["manufacturer"],
+            "model": self._src_data["model"],
+            "name": self.txt_name.text().strip(),
+            "serial_number": self.txt_sn.text().strip() or None,
+            "notes": self.txt_notes.text().strip() or None,
+        }
 
 
 class _LinacDialog(QDialog):

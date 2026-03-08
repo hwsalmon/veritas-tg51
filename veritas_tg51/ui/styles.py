@@ -58,6 +58,16 @@ QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
     padding: 4px 8px;
     font-size: 12px;
     min-height: 24px;
+    max-height: 30px;
+}
+/* Ensure combobox popup is wide enough to show full item text */
+QComboBox QAbstractItemView {
+    min-width: 320px;
+    background-color: #FFFFFF;
+    border: 1px solid #BDC3C7;
+    selection-background-color: #D6EAF8;
+    selection-color: #154360;
+    padding: 2px;
 }
 QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {
     border: 1px solid #4DA6FF;
