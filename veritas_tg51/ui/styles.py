@@ -334,21 +334,21 @@ QLabel#saveStatus {
     padding: 2px 10px;
 }
 
-/* ── Theme toggle button in header ── */
+/* ── Theme toggle button in header (always on dark header bg) ── */
 QPushButton#btnTheme {
-    background-color: transparent;
-    color: #C8D6E5;
-    border: 1px solid #3D4A5C;
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: 14px;
-    padding: 2px 8px;
+    padding: 0px 10px;
     font-size: 16px;
     min-height: 28px;
-    min-width: 36px;
+    min-width: 40px;
     font-weight: normal;
 }
 QPushButton#btnTheme:hover {
-    background-color: #1E3050;
-    border-color: #4DA6FF;
+    background-color: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 """
 
@@ -397,7 +397,7 @@ QLabel#subTitle {
 /* ── Input fields ── */
 QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
     background-color: #252B3B;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 12px;
@@ -409,7 +409,7 @@ QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
 QComboBox QAbstractItemView {
     min-width: 320px;
     background-color: #252B3B;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     selection-background-color: #1E3A5A;
     selection-color: #7CC8FF;
     color: #D0D8E8;
@@ -477,7 +477,7 @@ QGroupBox {
     font-size: 12px;
     font-weight: bold;
     color: #7CC8FF;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     border-radius: 6px;
     margin-top: 14px;
     padding-top: 12px;
@@ -552,7 +552,7 @@ QLabel#errorLabel {
 
 /* ── Tab widget ── */
 QTabWidget::pane {
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     background-color: #1E2535;
     border-radius: 0px 4px 4px 4px;
 }
@@ -560,7 +560,7 @@ QTabBar::tab {
     background-color: #252B3B;
     color: #7899AA;
     padding: 8px 18px;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     border-bottom: none;
     font-size: 12px;
 }
@@ -579,7 +579,7 @@ QTableWidget {
     background-color: #1E2535;
     gridline-color: #2D3548;
     font-size: 12px;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
     color: #C0C8D8;
     alternate-background-color: #232A3A;
 }
@@ -609,7 +609,7 @@ QScrollBar:vertical {
     background: #1A1F2E;
 }
 QScrollBar::handle:vertical {
-    background: #3D4A5C;
+    background: #252D3E;
     border-radius: 4px;
     min-height: 20px;
 }
@@ -632,7 +632,7 @@ QMenuBar::item:selected {
 QMenu {
     background-color: #1E2535;
     color: #C0C8D8;
-    border: 1px solid #3D4A5C;
+    border: 1px solid #252D3E;
 }
 QMenu::item:selected {
     background-color: #1E3A5A;
@@ -657,7 +657,7 @@ QSplitter::handle {
 /* ── SpinBox arrows ── */
 QDoubleSpinBox::up-button, QSpinBox::up-button,
 QDoubleSpinBox::down-button, QSpinBox::down-button {
-    background-color: #3D4A5C;
+    background-color: #252D3E;
     border: none;
 }
 
@@ -697,20 +697,20 @@ QLabel#saveStatus {
     padding: 2px 10px;
 }
 
-/* ── Theme toggle button in header ── */
+/* ── Theme toggle button in header (always on dark header bg) ── */
 QPushButton#btnTheme {
-    background-color: transparent;
-    color: #C8D6E5;
-    border: 1px solid #3D4A5C;
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: 14px;
-    padding: 2px 8px;
+    padding: 0px 10px;
     font-size: 16px;
     min-height: 28px;
-    min-width: 36px;
+    min-width: 40px;
     font-weight: normal;
 }
 QPushButton#btnTheme:hover {
-    background-color: #252B3B;
-    border-color: #4DA6FF;
+    background-color: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 """

@@ -115,8 +115,9 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QWidget:
         header = QWidget()
+        header.setObjectName("appHeader")
         header.setFixedHeight(48)
-        header.setStyleSheet("background-color: #0D1B2E;")
+        header.setStyleSheet("QWidget#appHeader { background-color: #0D1B2E; }")
         layout = QHBoxLayout(header)
         layout.setContentsMargins(16, 0, 16, 0)
 
@@ -137,7 +138,7 @@ class MainWindow(QMainWindow):
 
         layout.addSpacing(12)
 
-        self._btn_theme = QPushButton("🌙")
+        self._btn_theme = QPushButton("☾")
         self._btn_theme.setObjectName("btnTheme")
         self._btn_theme.setToolTip("Toggle dark / light mode  (Ctrl+Shift+D)")
         self._btn_theme.setFixedSize(36, 30)
@@ -328,16 +329,16 @@ class MainWindow(QMainWindow):
     def _update_header_for_dark(self, dark: bool):
         """Update header widget colors to match the current theme."""
         if dark:
-            self._header_widget.setStyleSheet("background-color: #0A0F1C;")
+            self._header_widget.setStyleSheet("QWidget#appHeader { background-color: #0A0F1C; }")
             self._lbl_proto.setStyleSheet("color: #3A5070; font-size: 11px;")
             if hasattr(self, '_btn_theme'):
-                self._btn_theme.setText("☀")
+                self._btn_theme.setText("☼")
                 self._btn_theme.setToolTip("Switch to light mode  (Ctrl+Shift+D)")
         else:
-            self._header_widget.setStyleSheet("background-color: #0D1B2E;")
+            self._header_widget.setStyleSheet("QWidget#appHeader { background-color: #0D1B2E; }")
             self._lbl_proto.setStyleSheet("color: #5D7FA3; font-size: 11px;")
             if hasattr(self, '_btn_theme'):
-                self._btn_theme.setText("🌙")
+                self._btn_theme.setText("☾")
                 self._btn_theme.setToolTip("Switch to dark mode  (Ctrl+Shift+D)")
 
     def _toggle_dark_mode(self, checked: bool):

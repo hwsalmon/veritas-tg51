@@ -29,6 +29,7 @@ def main():
     )
 
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")   # force Fusion so Qt stylesheets fully control menu bar & all widgets
     app.setApplicationName("Veritas TG-51")
     app.setOrganizationName("Medical Physics")
     app.setApplicationVersion("1.0.0")
