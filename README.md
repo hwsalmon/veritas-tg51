@@ -82,6 +82,13 @@ It is designed around the clinical workflow at a radiation therapy department, s
 - `% deviation` from 1.000 cGy/MU shown only at `d_max`
 - Field size (photons) and applicator/cone (electrons) recorded
 - Auto-save and session restore on startup
+- Session history with resume, delete, and individual beam record export
+
+### User Interface
+- **Dark mode** — toggle via **☾/☼** button in the header bar or **View → Dark Mode** (`Ctrl+Shift+D`); preference persisted across sessions
+- Sidebar navigation: Current Session · Session History · Configuration
+- Clone treatment machine (copies all beam energies to the same or different institution)
+- Beam energies managed inline within the machine configuration dialog
 
 ### PDF Reporting
 - Professional two-page beam worksheets mirroring TG-51 Worksheets A and B
