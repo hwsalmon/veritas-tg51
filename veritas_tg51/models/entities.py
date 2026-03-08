@@ -2,8 +2,8 @@
 SQLAlchemy ORM models for Veritas TG-51.
 
 Entity hierarchy:
-  Center → Linac → BeamEnergy
-  Center → Equipment (IonChamber, Electrometer, Thermometer, Barometer)
+  Institution (Center) → Linac → BeamEnergy
+  Equipment (IonChamber, Electrometer, Thermometer, Barometer) — institution-independent
   BeamEnergy + Equipment → CalibrationSession → CalibrationResult
 """
 
@@ -53,18 +53,7 @@ class Center(Base):
     linacs: Mapped[list[Linac]] = relationship(
         "Linac", back_populates="center", cascade="all, delete-orphan"
     )
-    ion_chambers: Mapped[list[IonChamber]] = relationship(
-        "IonChamber", back_populates="center", cascade="all, delete-orphan"
-    )
-    electrometers: Mapped[list[Electrometer]] = relationship(
-        "Electrometer", back_populates="center", cascade="all, delete-orphan"
-    )
-    thermometers: Mapped[list[Thermometer]] = relationship(
-        "Thermometer", back_populates="center", cascade="all, delete-orphan"
-    )
-    barometers: Mapped[list[Barometer]] = relationship(
-        "Barometer", back_populates="center", cascade="all, delete-orphan"
-    )
+    # Equipment is institution-independent — no relationships here.
 
     def __repr__(self) -> str:
         return f"<Center id={self.id} name={self.name!r}>"
@@ -123,7 +112,7 @@ class IonChamber(Base):
     __tablename__ = "ion_chambers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), nullable=False)
+    # center_id removed: ion chambers are institution-independent (shared across sites)
     manufacturer: Mapped[str] = mapped_column(String(100), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "Exradin A12"
     serial_number: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -139,8 +128,6 @@ class IonChamber(Base):
     calibration_lab: Mapped[Optional[str]] = mapped_column(String(200))
     notes: Mapped[Optional[str]] = mapped_column(String(500))
 
-    center: Mapped[Center] = relationship("Center", back_populates="ion_chambers")
-
     def __repr__(self) -> str:
         return f"<IonChamber model={self.model!r} SN={self.serial_number!r}>"
 
@@ -149,7 +136,7 @@ class Electrometer(Base):
     __tablename__ = "electrometers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), nullable=False)
+    # center_id removed: electrometers are institution-independent (shared across sites)
     manufacturer: Mapped[str] = mapped_column(String(100), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     serial_number: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -159,14 +146,12 @@ class Electrometer(Base):
     calibration_lab: Mapped[Optional[str]] = mapped_column(String(200))
     notes: Mapped[Optional[str]] = mapped_column(String(500))
 
-    center: Mapped[Center] = relationship("Center", back_populates="electrometers")
-
 
 class Thermometer(Base):
     __tablename__ = "thermometers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), nullable=False)
+    # center_id removed: thermometers are institution-independent
     manufacturer: Mapped[Optional[str]] = mapped_column(String(100))
     model: Mapped[Optional[str]] = mapped_column(String(100))
     serial_number: Mapped[Optional[str]] = mapped_column(String(100))
@@ -174,22 +159,18 @@ class Thermometer(Base):
     calibration_date: Mapped[Optional[datetime.date]] = mapped_column(DateTime)
     notes: Mapped[Optional[str]] = mapped_column(String(500))
 
-    center: Mapped[Center] = relationship("Center", back_populates="thermometers")
-
 
 class Barometer(Base):
     __tablename__ = "barometers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    center_id: Mapped[int] = mapped_column(ForeignKey("centers.id"), nullable=False)
+    # center_id removed: barometers are institution-independent
     manufacturer: Mapped[Optional[str]] = mapped_column(String(100))
     model: Mapped[Optional[str]] = mapped_column(String(100))
     serial_number: Mapped[Optional[str]] = mapped_column(String(100))
     correction_offset_kpa: Mapped[float] = mapped_column(Float, default=0.0)  # additive, kPa
     calibration_date: Mapped[Optional[datetime.date]] = mapped_column(DateTime)
     notes: Mapped[Optional[str]] = mapped_column(String(500))
-
-    center: Mapped[Center] = relationship("Center", back_populates="barometers")
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +444,7 @@ def init_db(db_path: str = "data/veritas.db"):
 
 def _migrate(engine):
     """Add columns introduced after initial release without dropping data."""
-    migrations = {
+    add_column_migrations = {
         "beam_energies": [
             ("pdd_shift_pct",    "FLOAT"),
             ("clinical_pdd_pct", "FLOAT"),
@@ -485,11 +466,92 @@ def _migrate(engine):
         ],
     }
     with engine.connect() as conn:
-        for table, cols in migrations.items():
+        for table, cols in add_column_migrations.items():
             existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
             for col, typedef in cols:
                 if col not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}"))
+        conn.commit()
+
+    # Remove center_id from equipment tables — equipment is now institution-independent.
+    # SQLite can't ALTER FK columns directly, so we recreate each affected table.
+    _drop_equipment_center_id(engine)
+
+
+def _drop_equipment_center_id(engine):
+    """
+    Recreate equipment tables without center_id (institution-independent equipment).
+    Safe to re-run: skips tables that already lack the column.
+    """
+    # (table_name, CREATE TABLE sql without center_id)
+    table_defs = [
+        ("ion_chambers", """
+            CREATE TABLE ion_chambers (
+                id INTEGER NOT NULL PRIMARY KEY,
+                manufacturer VARCHAR(100) NOT NULL,
+                model VARCHAR(100) NOT NULL,
+                serial_number VARCHAR(100) NOT NULL,
+                r_cav_cm FLOAT NOT NULL,
+                wall_material VARCHAR(50),
+                wall_thickness_gcm2 FLOAT,
+                volume_cc FLOAT,
+                is_waterproof BOOLEAN,
+                n_dw_gy_per_c FLOAT NOT NULL,
+                calibration_date DATETIME,
+                calibration_lab VARCHAR(200),
+                notes VARCHAR(500)
+            )
+        """),
+        ("electrometers", """
+            CREATE TABLE electrometers (
+                id INTEGER NOT NULL PRIMARY KEY,
+                manufacturer VARCHAR(100) NOT NULL,
+                model VARCHAR(100) NOT NULL,
+                serial_number VARCHAR(100) NOT NULL,
+                p_elec FLOAT,
+                calibration_date DATETIME,
+                calibration_lab VARCHAR(200),
+                notes VARCHAR(500)
+            )
+        """),
+        ("thermometers", """
+            CREATE TABLE thermometers (
+                id INTEGER NOT NULL PRIMARY KEY,
+                manufacturer VARCHAR(100),
+                model VARCHAR(100),
+                serial_number VARCHAR(100),
+                correction_offset_c FLOAT,
+                calibration_date DATETIME,
+                notes VARCHAR(500)
+            )
+        """),
+        ("barometers", """
+            CREATE TABLE barometers (
+                id INTEGER NOT NULL PRIMARY KEY,
+                manufacturer VARCHAR(100),
+                model VARCHAR(100),
+                serial_number VARCHAR(100),
+                correction_offset_kpa FLOAT,
+                calibration_date DATETIME,
+                notes VARCHAR(500)
+            )
+        """),
+    ]
+
+    with engine.connect() as conn:
+        for table, create_sql in table_defs:
+            cols_info = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+            col_names = {row[1] for row in cols_info}
+            if "center_id" not in col_names:
+                continue  # Already migrated
+
+            copy_cols = ", ".join(c for c in (row[1] for row in cols_info) if c != "center_id")
+            conn.execute(text("PRAGMA foreign_keys = OFF"))
+            conn.execute(text(f"ALTER TABLE {table} RENAME TO _{table}_old"))
+            conn.execute(text(create_sql))
+            conn.execute(text(f"INSERT INTO {table} ({copy_cols}) SELECT {copy_cols} FROM _{table}_old"))
+            conn.execute(text(f"DROP TABLE _{table}_old"))
+            conn.execute(text("PRAGMA foreign_keys = ON"))
         conn.commit()
 
 

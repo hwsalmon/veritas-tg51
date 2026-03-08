@@ -70,9 +70,9 @@ It is designed around the clinical workflow at a radiation therapy department, s
 - Calibration date tracking with automatic `>2 year` overdue warning
 
 ### Equipment Management
-- Multi-centre, multi-machine database
-- Centres → Treatment Machines → Beam Energies hierarchy
-- Ion chambers, electrometers, thermometers, barometers per centre
+- Multi-institution, multi-machine database
+- Institutions → Treatment Machines → Beam Energies hierarchy
+- Ion chambers and electrometers are institution-independent — a single piece of equipment can be used across multiple sites without re-entry
 - Beam-level default values: `%dd shift`, clinical `%dd`, `I_50`
 
 ### Calibration Session
@@ -175,12 +175,12 @@ data/
 
 1. Launch the application: `veritas-tg51`
 2. Go to the **Equipment** tab
-3. Add your **Centre** (institution name)
-4. Add your **Treatment Machine** (manufacturer, model, serial number)
-5. Add **Beam Energies** for the machine (modality, energy, default %dd/I_50 values)
-6. Add your **Ion Chamber** (model, serial number, N_D,w calibration factor, r_cav, calibration date)
-7. Add your **Electrometer** (model, serial number, P_elec, calibration date)
-8. Click **New Session** on the Session tab, select your equipment and date
+3. Add your **Institution** (e.g. "Franciscan Health Indianapolis") under the **Institutions** tab
+4. Add your **Treatment Machine(s)** under the **Linacs** tab, linked to the institution
+5. Add **Beam Energies** for each machine (modality, energy, default %dd/I_50 values)
+6. Add your **Ion Chamber** (model, serial number, N_D,w calibration factor, r_cav, calibration date) — chambers are shared across all institutions
+7. Add your **Electrometer** (model, serial number, P_elec, calibration date) — likewise institution-independent
+8. Click **New Session** on the Session tab, select institution, machine, and instruments
 9. Enter measurements on each beam energy tab and click **Calculate**
 10. Use **Print Full Session Report** to generate the PDF
 

@@ -32,7 +32,7 @@ from PySide6.QtCore import QDate
 
 
 class EquipmentPage(QWidget):
-    """Tabbed CRUD interface for Centers, Linacs, Beams, Chambers, Electrometers."""
+    """Tabbed CRUD interface for Institutions, Linacs, Beams, Chambers, Electrometers."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,7 +63,7 @@ class EquipmentPage(QWidget):
         self.tab_chambers = _ChambersTab()
         self.tab_electrometers = _ElectrometersTab()
 
-        self.tabs.addTab(self.tab_centers, "Centers")
+        self.tabs.addTab(self.tab_centers, "Institutions")
         self.tabs.addTab(self.tab_linacs, "Linacs")
         self.tabs.addTab(self.tab_beams, "Beams")
         self.tabs.addTab(self.tab_chambers, "Ion Chambers")
@@ -173,9 +173,9 @@ class _CentersTab(_TableTab):
     data_changed = __import__('PySide6.QtCore', fromlist=['Signal']).Signal()
 
     def __init__(self, parent=None):
-        super().__init__(["ID", "Name", "Institution", "Physicist", "Created"], parent)
+        super().__init__(["ID", "Institution Name", "Health System / Network", "Physicist", "Created"], parent)
         self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 200)
+        self.table.setColumnWidth(1, 220)
         self.table.setColumnWidth(2, 180)
         self.table.setColumnWidth(3, 140)
 
@@ -252,7 +252,7 @@ class _CentersTab(_TableTab):
             QMessageBox.information(self, "No Selection", "Select a row first.")
             return
         if QMessageBox.question(
-            self, "Confirm Delete", f"Delete Center #{rec_id} and all its equipment?",
+            self, "Confirm Delete", f"Delete Institution #{rec_id} and all its machines?",
             QMessageBox.Yes | QMessageBox.No,
         ) != QMessageBox.Yes:
             return
@@ -273,14 +273,16 @@ class _CentersTab(_TableTab):
 class _CenterDialog(QDialog):
     def __init__(self, data: dict = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Center")
-        self.setMinimumWidth(360)
+        self.setWindowTitle("Institution")
+        self.setMinimumWidth(400)
         form = QFormLayout(self)
         self.txt_name = QLineEdit(data.get("name", "") if data else "")
+        self.txt_name.setPlaceholderText("e.g. Franciscan Health Indianapolis")
         self.txt_institution = QLineEdit(data.get("institution", "") if data else "")
+        self.txt_institution.setPlaceholderText("e.g. Franciscan Health  (optional)")
         self.txt_physicist = QLineEdit(data.get("physicist", "") if data else "")
-        form.addRow("Name *:", self.txt_name)
-        form.addRow("Institution:", self.txt_institution)
+        form.addRow("Institution name *:", self.txt_name)
+        form.addRow("Health system / network:", self.txt_institution)
         form.addRow("Physicist:", self.txt_physicist)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self._validate)
@@ -289,7 +291,7 @@ class _CenterDialog(QDialog):
 
     def _validate(self):
         if not self.txt_name.text().strip():
-            QMessageBox.warning(self, "Required", "Name is required.")
+            QMessageBox.warning(self, "Required", "Institution name is required.")
             return
         self.accept()
 
@@ -705,16 +707,14 @@ class _ChambersTab(_TableTab):
 
     def __init__(self, parent=None):
         super().__init__(
-            ["ID", "Center", "Manufacturer", "Model", "S/N",
-             "N_D,w (Gy/C)", "Cal. Date", "Notes"], parent,
+            ["ID", "Manufacturer", "Model", "S/N", "N_D,w (Gy/C)", "Cal. Date", "Notes"], parent,
         )
         self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 130)
-        self.table.setColumnWidth(2, 120)
+        self.table.setColumnWidth(1, 150)
+        self.table.setColumnWidth(2, 130)
         self.table.setColumnWidth(3, 110)
-        self.table.setColumnWidth(4, 100)
-        self.table.setColumnWidth(5, 120)
-        self.table.setColumnWidth(6, 90)
+        self.table.setColumnWidth(4, 130)
+        self.table.setColumnWidth(5, 90)
 
     def refresh(self):
         from ...models.db import get_session, is_ready
@@ -729,7 +729,6 @@ class _ChambersTab(_TableTab):
             for rec in rows:
                 r = self.table.rowCount()
                 self.table.insertRow(r)
-                center_name = rec.center.name if rec.center else str(rec.center_id)
                 cal_date = ""
                 if rec.calibration_date:
                     try:
@@ -737,31 +736,15 @@ class _ChambersTab(_TableTab):
                     except Exception:
                         cal_date = str(rec.calibration_date)
                 self._set_row(r, [
-                    rec.id, center_name, rec.manufacturer, rec.model,
+                    rec.id, rec.manufacturer, rec.model,
                     rec.serial_number, f"{rec.n_dw_gy_per_c:.4g}", cal_date, rec.notes or "",
                 ])
             self._update_count()
         finally:
             session.close()
 
-    def _get_centers(self):
-        from ...models.db import get_session, is_ready
-        from ...models.entities import Center
-        from sqlalchemy import select
-        if not is_ready():
-            return []
-        session = get_session()
-        try:
-            return [(c.id, c.name) for c in session.scalars(select(Center).order_by(Center.name)).all()]
-        finally:
-            session.close()
-
     def _add(self):
-        centers = self._get_centers()
-        if not centers:
-            QMessageBox.warning(self, "No Centers", "Add a Center first.")
-            return
-        dlg = _ChamberDialog(centers=centers, parent=self)
+        dlg = _ChamberDialog(parent=self)
         if dlg.exec() == QDialog.Accepted:
             from ...models.db import get_session
             from ...models.entities import IonChamber
@@ -777,7 +760,6 @@ class _ChambersTab(_TableTab):
         rec_id = self._selected_id()
         if rec_id is None:
             return
-        centers = self._get_centers()
         from ...models.db import get_session
         from ...models.entities import IonChamber
         session = get_session()
@@ -786,7 +768,7 @@ class _ChambersTab(_TableTab):
             if not obj:
                 return
             data = {
-                "center_id": obj.center_id, "manufacturer": obj.manufacturer,
+                "manufacturer": obj.manufacturer,
                 "model": obj.model, "serial_number": obj.serial_number,
                 "r_cav_cm": obj.r_cav_cm, "wall_material": obj.wall_material or "",
                 "volume_cc": obj.volume_cc, "is_waterproof": obj.is_waterproof,
@@ -797,7 +779,7 @@ class _ChambersTab(_TableTab):
             }
         finally:
             session.close()
-        dlg = _ChamberDialog(centers=centers, data=data, parent=self)
+        dlg = _ChamberDialog(data=data, parent=self)
         if dlg.exec() == QDialog.Accepted:
             session = get_session()
             try:
@@ -833,19 +815,11 @@ class _ChambersTab(_TableTab):
 
 
 class _ChamberDialog(QDialog):
-    def __init__(self, centers: list[tuple[int, str]], data: dict = None, parent=None):
+    def __init__(self, data: dict = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Ion Chamber")
         self.setMinimumWidth(400)
         form = QFormLayout(self)
-
-        self.cmb_center = QComboBox()
-        for cid, cname in centers:
-            self.cmb_center.addItem(cname, cid)
-        if data and data.get("center_id"):
-            for i in range(self.cmb_center.count()):
-                if self.cmb_center.itemData(i) == data["center_id"]:
-                    self.cmb_center.setCurrentIndex(i)
 
         d = data or {}
         self.txt_manufacturer = QLineEdit(d.get("manufacturer", "Standard Imaging"))
@@ -889,7 +863,6 @@ class _ChamberDialog(QDialog):
         self.txt_lab = QLineEdit(d.get("calibration_lab", ""))
         self.txt_notes = QLineEdit(d.get("notes", ""))
 
-        form.addRow("Center *:", self.cmb_center)
         form.addRow("Manufacturer *:", self.txt_manufacturer)
         form.addRow("Model *:", self.txt_model)
         form.addRow("Serial number *:", self.txt_sn)
@@ -921,7 +894,6 @@ class _ChamberDialog(QDialog):
         import datetime
         qd = self.de_caldate.date()
         return {
-            "center_id": self.cmb_center.currentData(),
             "manufacturer": self.txt_manufacturer.text().strip(),
             "model": self.txt_model.text().strip(),
             "serial_number": self.txt_sn.text().strip(),
@@ -945,14 +917,13 @@ class _ElectrometersTab(_TableTab):
 
     def __init__(self, parent=None):
         super().__init__(
-            ["ID", "Center", "Manufacturer", "Model", "S/N", "P_elec", "Cal. Date"], parent,
+            ["ID", "Manufacturer", "Model", "S/N", "P_elec", "Cal. Date"], parent,
         )
         self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 130)
-        self.table.setColumnWidth(2, 120)
-        self.table.setColumnWidth(3, 120)
-        self.table.setColumnWidth(4, 100)
-        self.table.setColumnWidth(5, 70)
+        self.table.setColumnWidth(1, 150)
+        self.table.setColumnWidth(2, 150)
+        self.table.setColumnWidth(3, 110)
+        self.table.setColumnWidth(4, 70)
 
     def refresh(self):
         from ...models.db import get_session, is_ready
@@ -967,7 +938,6 @@ class _ElectrometersTab(_TableTab):
             for rec in rows:
                 r = self.table.rowCount()
                 self.table.insertRow(r)
-                center_name = rec.center.name if rec.center else str(rec.center_id)
                 cal_date = ""
                 if rec.calibration_date:
                     try:
@@ -975,31 +945,15 @@ class _ElectrometersTab(_TableTab):
                     except Exception:
                         cal_date = str(rec.calibration_date)
                 self._set_row(r, [
-                    rec.id, center_name, rec.manufacturer, rec.model,
+                    rec.id, rec.manufacturer, rec.model,
                     rec.serial_number, f"{rec.p_elec:.4f}", cal_date,
                 ])
             self._update_count()
         finally:
             session.close()
 
-    def _get_centers(self):
-        from ...models.db import get_session, is_ready
-        from ...models.entities import Center
-        from sqlalchemy import select
-        if not is_ready():
-            return []
-        session = get_session()
-        try:
-            return [(c.id, c.name) for c in session.scalars(select(Center).order_by(Center.name)).all()]
-        finally:
-            session.close()
-
     def _add(self):
-        centers = self._get_centers()
-        if not centers:
-            QMessageBox.warning(self, "No Centers", "Add a Center first.")
-            return
-        dlg = _ElectrometerDialog(centers=centers, parent=self)
+        dlg = _ElectrometerDialog(parent=self)
         if dlg.exec() == QDialog.Accepted:
             from ...models.db import get_session
             from ...models.entities import Electrometer
@@ -1015,7 +969,6 @@ class _ElectrometersTab(_TableTab):
         rec_id = self._selected_id()
         if rec_id is None:
             return
-        centers = self._get_centers()
         from ...models.db import get_session
         from ...models.entities import Electrometer
         session = get_session()
@@ -1024,14 +977,14 @@ class _ElectrometersTab(_TableTab):
             if not obj:
                 return
             data = {
-                "center_id": obj.center_id, "manufacturer": obj.manufacturer,
+                "manufacturer": obj.manufacturer,
                 "model": obj.model, "serial_number": obj.serial_number,
                 "p_elec": obj.p_elec, "calibration_date": obj.calibration_date,
                 "calibration_lab": obj.calibration_lab or "", "notes": obj.notes or "",
             }
         finally:
             session.close()
-        dlg = _ElectrometerDialog(centers=centers, data=data, parent=self)
+        dlg = _ElectrometerDialog(data=data, parent=self)
         if dlg.exec() == QDialog.Accepted:
             session = get_session()
             try:
@@ -1067,18 +1020,11 @@ class _ElectrometersTab(_TableTab):
 
 
 class _ElectrometerDialog(QDialog):
-    def __init__(self, centers: list[tuple[int, str]], data: dict = None, parent=None):
+    def __init__(self, data: dict = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Electrometer")
         self.setMinimumWidth(360)
         form = QFormLayout(self)
-        self.cmb_center = QComboBox()
-        for cid, cname in centers:
-            self.cmb_center.addItem(cname, cid)
-        if data and data.get("center_id"):
-            for i in range(self.cmb_center.count()):
-                if self.cmb_center.itemData(i) == data["center_id"]:
-                    self.cmb_center.setCurrentIndex(i)
         d = data or {}
         self.txt_manufacturer = QLineEdit(d.get("manufacturer", ""))
         self.txt_model = QLineEdit(d.get("model", ""))
@@ -1104,7 +1050,6 @@ class _ElectrometerDialog(QDialog):
         self.txt_lab = QLineEdit(d.get("calibration_lab", ""))
         self.txt_notes = QLineEdit(d.get("notes", ""))
 
-        form.addRow("Center *:", self.cmb_center)
         form.addRow("Manufacturer *:", self.txt_manufacturer)
         form.addRow("Model *:", self.txt_model)
         form.addRow("Serial number *:", self.txt_sn)
@@ -1133,7 +1078,6 @@ class _ElectrometerDialog(QDialog):
         import datetime
         qd = self.de_caldate.date()
         return {
-            "center_id": self.cmb_center.currentData(),
             "manufacturer": self.txt_manufacturer.text().strip(),
             "model": self.txt_model.text().strip(),
             "serial_number": self.txt_sn.text().strip(),

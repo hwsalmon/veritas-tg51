@@ -68,14 +68,14 @@ class NewSessionDialog(QDialog):
         layout.setSpacing(14)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # ── Site & Machine ──
-        site_grp = QGroupBox("Site & Treatment Machine")
+        # ── Institution & Machine ──
+        site_grp = QGroupBox("Institution & Treatment Machine")
         site_form = QFormLayout(site_grp)
         site_form.setSpacing(10)
 
         self.cmb_center = QComboBox()
         self.cmb_center.currentIndexChanged.connect(self._on_center_changed)
-        site_form.addRow("Center:", self.cmb_center)
+        site_form.addRow("Institution:", self.cmb_center)
 
         self.cmb_linac = QComboBox()
         site_form.addRow("Treatment machine:", self.cmb_linac)
@@ -114,8 +114,8 @@ class NewSessionDialog(QDialog):
 
         # ── No data hint ──
         self.lbl_hint = QLabel(
-            "ⓘ  No equipment found in database. "
-            "Add centers, machines and instruments in the Equipment page first."
+            "ⓘ  No institutions found in database. "
+            "Add institutions, machines and instruments in the Equipment page first."
         )
         self.lbl_hint.setWordWrap(True)
         self.lbl_hint.setStyleSheet("color: #7D6608; font-size: 11px;")
@@ -155,12 +155,14 @@ class NewSessionDialog(QDialog):
         for c in centers:
             self.cmb_center.addItem(c.name, userData=c.id)
 
+        # Equipment is institution-independent — load all once
+        self._load_instruments()
+
     def _on_center_changed(self, idx: int):
         if idx < 0:
             return
         center_id = self.cmb_center.currentData()
         self._load_linacs(center_id)
-        self._load_instruments(center_id)
 
     def _load_linacs(self, center_id: int):
         from ...models.db import get_session
@@ -178,7 +180,8 @@ class NewSessionDialog(QDialog):
             display = f"{l.name}  ({l.manufacturer} {l.model})"
             self.cmb_linac.addItem(display, userData=l.id)
 
-    def _load_instruments(self, center_id: int):
+    def _load_instruments(self):
+        """Load all chambers and electrometers — equipment is institution-independent."""
         from ...models.db import get_session
         from ...models.entities import IonChamber, Electrometer
 
@@ -186,18 +189,8 @@ class NewSessionDialog(QDialog):
         self.cmb_electrometer.clear()
         db = get_session()
         try:
-            chambers = (
-                db.query(IonChamber)
-                .filter(IonChamber.center_id == center_id)
-                .order_by(IonChamber.model)
-                .all()
-            )
-            electrometers = (
-                db.query(Electrometer)
-                .filter(Electrometer.center_id == center_id)
-                .order_by(Electrometer.model)
-                .all()
-            )
+            chambers = db.query(IonChamber).order_by(IonChamber.model).all()
+            electrometers = db.query(Electrometer).order_by(Electrometer.model).all()
         finally:
             db.close()
 
@@ -219,19 +212,19 @@ class NewSessionDialog(QDialog):
     def _on_accept(self):
         if self.cmb_center.count() == 0:
             QMessageBox.warning(self, "No Data",
-                                "Please add a center in the Equipment page first.")
+                                "Please add an institution in the Equipment page first.")
             return
         if self.cmb_linac.count() == 0:
             QMessageBox.warning(self, "No Machine",
-                                "Please add a treatment machine for this center first.")
+                                "Please add a treatment machine for this institution first.")
             return
         if self.cmb_chamber.count() == 0:
             QMessageBox.warning(self, "No Chamber",
-                                "Please add an ion chamber for this center first.")
+                                "Please add an ion chamber in the Equipment page first.")
             return
         if self.cmb_electrometer.count() == 0:
             QMessageBox.warning(self, "No Electrometer",
-                                "Please add an electrometer for this center first.")
+                                "Please add an electrometer in the Equipment page first.")
             return
 
         center_id = self.cmb_center.currentData()
