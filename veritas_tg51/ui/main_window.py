@@ -195,6 +195,7 @@ class MainWindow(QMainWindow):
         return header
 
     def _build_sidebar(self) -> QWidget:
+        from PySide6.QtWidgets import QAbstractScrollArea, QSizePolicy
         container = QWidget()
         container.setFixedWidth(210)
         layout = QVBoxLayout(container)
@@ -204,6 +205,10 @@ class MainWindow(QMainWindow):
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("sidebar")
         self.sidebar.setSpacing(2)
+        # Shrink to fit nav items so the New Session button sits just below them
+        self.sidebar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.sidebar.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         for name, tooltip in NAV_ITEMS:
             item = QListWidgetItem(name)
@@ -215,19 +220,21 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self._on_nav_changed)
         layout.addWidget(self.sidebar)
 
+        # New Session button — sits directly below the nav items
+        self.btn_new_session = QPushButton("New Session…")
+        self.btn_new_session.setObjectName("btnSecondary")
+        self.btn_new_session.setToolTip("Save current session and start a new calibration")
+        self.btn_new_session.setFixedHeight(36)
+        self.btn_new_session.clicked.connect(self._start_new_session)
+        layout.addWidget(self.btn_new_session)
+
+        layout.addStretch()
+
         # Divider
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setStyleSheet("color: #cccccc;")
         layout.addWidget(line)
-
-        # New Session button
-        self.btn_new_session = QPushButton("New Session…")
-        self.btn_new_session.setObjectName("btnSecondary")
-        self.btn_new_session.setToolTip("Save current session and start a new calibration")
-        self.btn_new_session.setFixedHeight(34)
-        self.btn_new_session.clicked.connect(self._start_new_session)
-        layout.addWidget(self.btn_new_session)
 
         # Print Full Report button
         self.btn_full_report = QPushButton("Print Full Report")
@@ -414,8 +421,8 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(idx)
 
     def _start_new_session(self):
-        """Open the session setup wizard and build a SessionPage."""
-        from PySide6.QtWidgets import QMessageBox
+        """Save current session, clear the content area, then run the setup wizard."""
+        from PySide6.QtWidgets import QDialog, QMessageBox
         try:
             from .dialogs.new_session_dialog import NewSessionDialog
             from .pages.session_page import SessionPage
@@ -428,23 +435,34 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            # Save the current session before opening the wizard
+            # 1. Flush autosave on whatever is currently at index 0
             old = self.stack.widget(0)
             if hasattr(old, "_save_timer") and hasattr(old, "_do_autosave"):
                 if old._save_timer.isActive():
                     old._save_timer.stop()
                 old._do_autosave()
 
-            dlg = NewSessionDialog(self)
-            from PySide6.QtWidgets import QDialog
-            if dlg.exec() != QDialog.Accepted or dlg.setup is None:
-                return
-
-            old = self.stack.widget(0)
-
-            # Replace whatever is at stack index 0
+            # 2. Immediately replace with a fresh placeholder so the UI
+            #    clears before the wizard dialog appears
             self.stack.removeWidget(old)
             old.deleteLater()
+            placeholder = self._make_session_placeholder()
+            self.stack.insertWidget(0, placeholder)
+            self.sidebar.setCurrentRow(0)
+            self.stack.setCurrentIndex(0)
+            self.status.showMessage("Starting new calibration session…")
+
+            # 3. Open the setup wizard
+            dlg = NewSessionDialog(self)
+            if dlg.exec() != QDialog.Accepted or dlg.setup is None:
+                # Wizard cancelled — leave the placeholder in place
+                self.status.showMessage("New session cancelled.")
+                return
+
+            # 4. Build and show the new session page
+            cur = self.stack.widget(0)
+            self.stack.removeWidget(cur)
+            cur.deleteLater()
 
             session_page = SessionPage(dlg.setup, self)
             self.stack.insertWidget(0, session_page)
